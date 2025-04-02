@@ -22,6 +22,10 @@ Then, you can import and use it in your Cloudflare Worker application.
 
 ## Usage
 
+### Full Example Project
+
+See [Deltachaos/microapi-example](https://github.com/Deltachaos/microapi-example)
+
 ### Basic Cloudflare Worker Entrypoint
 
 This is a small example to demonstrate the basic functionality.
@@ -93,9 +97,6 @@ from microapi.util import logger
 
 @tag('event_subscriber')
 class MyEventSubscriber:
-    def __init__(self, context: CloudContext):
-        self.context = context
-    
     @listen(RequestEvent)
     def some_event(self, event: RequestEvent):
         logger(__name__).debug(f"Received {event.request.body()}")
