@@ -1,8 +1,10 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
+from js import fetch, Headers, Response, Object
 from workers import Response as CloudflareResponse, Request as CloudflareRequest
-from miniapi.bridge import RequestConverter as BridgeRequestConverter, ResponseConverter as BridgeResponseConverter
-from miniapi.bridge.cloudflare.util import to_py
-from miniapi.http import Request, Response
+
+from microapi.bridge import RequestConverter as BridgeRequestConverter, ResponseConverter as BridgeResponseConverter
+from microapi.bridge.cloudflare.util import to_py, to_js
+from microapi.http import Request, Response, ClientRequest, ClientResponse as FrameworkClientResponse, ClientExecutor as FrameworkClientExecutor
 
 
 class FrameworkCloudflareRequest(Request):
@@ -25,17 +27,49 @@ class FrameworkCloudflareRequest(Request):
 
 
 class RequestConverter(BridgeRequestConverter):
-    async def to_miniapi(self, _: CloudflareRequest) -> Request:
+    async def to_microapi(self, _: CloudflareRequest) -> Request:
         return FrameworkCloudflareRequest(_)
 
-    async def from_miniapi(self, _: Request) -> CloudflareRequest:
+    async def from_microapi(self, _: Request) -> CloudflareRequest:
         raise NotImplementedError()
 
 
 class ResponseConverter(BridgeResponseConverter):
-    async def to_miniapi(self, _: CloudflareResponse) -> Response:
+    async def to_microapi(self, _: CloudflareResponse) -> Response:
         raise NotImplementedError()
 
-    async def from_miniapi(self, _: Response) -> CloudflareResponse:
+    async def from_microapi(self, _: Response) -> CloudflareResponse:
         return CloudflareResponse(await _.body(), _.status_code, headers=_.headers)
 
+
+class ClientResponse(FrameworkClientResponse):
+    def __init__(self, response):
+        super().__init__()
+        self.headers = {}
+        for k, v in response.headers:
+            self.headers[k.lower()] = to_py(v)
+        self.status_code = to_py(response.status)
+        self._body = response
+
+    async def json(self):
+        proxy = await self._response.json()
+        return to_py(proxy)
+
+    async def body(self):
+        proxy = await self._response.text()
+        return to_py(proxy)
+
+
+class ClientExecutor(FrameworkClientExecutor):
+    async def do_request(self, request: ClientRequest) -> FrameworkClientResponse:
+        options = {
+            "method": request.method,
+            "headers": request.headers
+        }
+
+        if request.body:
+            options["body"] = request.body
+
+        url = urlunparse(request.url)
+        result = await fetch(url, to_js(options))
+        return ClientResponse(result)

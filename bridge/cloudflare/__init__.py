@@ -1,10 +1,14 @@
 from typing import Any
 
-from miniapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
-from miniapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter
-from miniapi.di import Container, ServiceProvider
-from miniapi.bridge import CloudContext as FrameworkCloudContext
-from miniapi.kernel import HttpKernel as FrameworkHttpKernel
+from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
+from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
+from microapi.bridge.cloudflare.kv import StoreManager as BridgeStoreManager
+from microapi.di import Container, ServiceProvider
+from microapi.bridge import CloudContext as FrameworkCloudContext
+from microapi.kernel import HttpKernel as FrameworkHttpKernel
+from microapi.http import ClientExecutor
+
+from miniapi.kv import StoreManager
 
 
 class CloudContext(FrameworkCloudContext):
@@ -45,6 +49,11 @@ class App(ServiceProvider):
     def services(self):
         yield RequestConverter, lambda _: BridgeRequestConverter()
         yield ResponseConverter, lambda _: BridgeResponseConverter()
+        yield ClientExecutor, lambda _: BridgeClientExecutor()
+        async def store_manager_factory(_):
+            context = await _.get(CloudContext)
+            return BridgeStoreManager(context)
+        yield StoreManager, store_manager_factory
 
     def on_fetch(self):
         async def handler(request, env):
@@ -52,9 +61,9 @@ class App(ServiceProvider):
             request_converter = await self.container.get(RequestConverter)
             response_converter = await self.container.get(ResponseConverter)
 
-            converted = await request_converter.to_miniapi(request)
+            converted = await request_converter.to_microapi(request)
             response = await self.kernel.handle(converted)
-            return await response_converter.from_miniapi(response)
+            return await response_converter.from_microapi(response)
 
         return handler
 

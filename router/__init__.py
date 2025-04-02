@@ -1,7 +1,8 @@
 import re
 from typing import Dict, Type, Tuple, Callable, Optional
-from miniapi.http import Request
-from miniapi.util import logger
+
+from microapi.http import Request
+from microapi.util import logger
 
 
 def route(_route: str):
@@ -11,6 +12,30 @@ def route(_route: str):
         func._routes.append(_route)
         return func
     return decorator
+
+
+def get(_route: str):
+    raise NotImplementedError()
+
+
+def post(_route: str):
+    raise NotImplementedError()
+
+
+def options(_route: str):
+    raise NotImplementedError()
+
+
+def delete(_route: str):
+    raise NotImplementedError()
+
+
+def put(_route: str):
+    raise NotImplementedError()
+
+
+def patch(_route: str):
+    raise NotImplementedError()
 
 
 class Router:

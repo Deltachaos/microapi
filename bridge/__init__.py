@@ -1,20 +1,20 @@
 from typing import Any
-from miniapi.http import Request, Response
+from microapi.http import Request, Response
 
 
 class RequestConverter:
-    async def to_miniapi(self, _: Any) -> Request:
+    async def to_microapi(self, _: Any) -> Request:
         pass
 
-    async def from_miniapi(self, _: Request) -> Any:
+    async def from_microapi(self, _: Request) -> Any:
         pass
 
 
 class ResponseConverter:
-    async def to_miniapi(self, _: Any) -> Response:
+    async def to_microapi(self, _: Any) -> Response:
         return Response()
 
-    async def from_miniapi(self, _: Response) -> Any:
+    async def from_microapi(self, _: Response) -> Any:
         pass
 
 

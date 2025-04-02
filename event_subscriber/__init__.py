@@ -1,10 +1,10 @@
 import copy
 import inspect
 
-from miniapi.di import tag, Container
-from miniapi.event import listen
-from miniapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException
-from miniapi.router import Router
+from microapi.di import tag, Container
+from microapi.event import listen
+from microapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException
+from microapi.router import Router
 
 
 @tag('event_subscriber')

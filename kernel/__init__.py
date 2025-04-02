@@ -1,11 +1,11 @@
 import json
 from typing import Any
 
-from miniapi.cron import CronEvent
-from miniapi.di import Container
-from miniapi.event import Event, EventDispatcher
-from miniapi.http import Response, Request
-from miniapi.util import logger
+from microapi.cron import CronEvent
+from microapi.di import Container
+from microapi.event import Event, EventDispatcher
+from microapi.http import Response, Request
+from microapi.util import logger
 
 
 class HttpException(Exception):
