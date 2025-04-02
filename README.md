@@ -31,14 +31,22 @@ This is a small example to demonstrate the basic functionality.
 from microapi.bridge.cloudflare import App
 from microapi.config import FrameworkServiceProvider
 from microapi.di import tag, ServiceProvider
+from microapi.bridge import CloudContext
+from microapi.bridge.cloudflare import CloudContext as CloudflareCloudContext
+from microapi.bridge.cloudflare.util import to_py
 from microapi.http import Response
 from microapi.router import route
 
 @tag('controller')
 class MyController:
+    def __init__(self, context: CloudflareCloudContext):
+        self.context = context
+    
     @route('/some/{data}')
     async def action(self, data: str):
-        return Response(f"data {data}")
+        store = await self.context.binding("SOME_KV_STORE")
+        store_data = to_py(await store.get(data))
+        return Response(f"data {store_data}")
 
 class AppServiceProvider(ServiceProvider):
     def services(self):
@@ -61,6 +69,10 @@ name = "my-app"
 main = "main.py"
 compatibility_flags = ["python_workers"]
 compatibility_date = "2024-10-22"
+
+kv_namespaces = [
+  { binding = "SOME_KV_STORE", id = "<id>" }
+]
 ```
 
 ## Full Application Example
@@ -73,6 +85,7 @@ from urllib.parse import urlparse
 from microapi.http import Request, JsonResponse
 from microapi.kernel import HttpKernel, ViewEvent
 from microapi.config import FrameworkServiceProvider
+from microapi.cron import CronEvent
 from microapi.di import ServiceProvider, tag
 from microapi.event import listen
 from microapi.kernel import RequestEvent
@@ -81,14 +94,20 @@ from microapi.util import logger
 
 @tag('event_subscriber')
 class MyEventSubscriber:
+    def __init__(self, context: CloudContext):
+        self.context = context
+    
     @listen(RequestEvent)
     def some_event(self, event: RequestEvent):
         logger(__name__).debug(f"Received {event.request.body()}")
-        pass
 
     @listen(ViewEvent)
     def some_event(self, event: ViewEvent):
         event.response = JsonResponse(event.controller_result, status_code=400, headers={"X-Some-Header": "value"})
+
+    @listen(CronEvent)
+    def on_cron(self, event: CronEvent):
+        logger(__name__).info(f"Cron event")
 
 class MyService:
     def __init__(self, request: Request):

@@ -17,3 +17,10 @@ class ResponseConverter:
     async def from_miniapi(self, _: Response) -> Any:
         pass
 
+
+class CloudContext:
+    def __init__(self, ):
+        self.provider_name = None
+
+    async def raw(self) -> dict:
+        return {}

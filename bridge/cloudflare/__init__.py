@@ -1,7 +1,33 @@
+from typing import Any
+
 from miniapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
 from miniapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter
 from miniapi.di import Container, ServiceProvider
+from miniapi.bridge import CloudContext as FrameworkCloudContext
 from miniapi.kernel import HttpKernel as FrameworkHttpKernel
+
+
+class CloudContext(FrameworkCloudContext):
+    def __init__(self, context=None, controller=None, env=None):
+        super().__init__()
+        self._raw = {
+            "controller": controller,
+            "env": env,
+            "context": context
+        }
+        self.provider_name = "cloudflare"
+
+    async def raw(self) -> dict:
+        return self._raw
+
+    async def binding(self, name: str) -> Any:
+        if self._raw["env"] is None:
+            raise RuntimeError("Environment not set")
+
+        if name not in self._raw["env"]:
+            raise RuntimeError(f"Binding {name} not available")
+
+        return self._raw["env"][name]
 
 
 class App(ServiceProvider):
@@ -22,6 +48,7 @@ class App(ServiceProvider):
 
     def on_fetch(self):
         async def handler(request, env):
+            self.container.set(CloudContext, lambda _: CloudContext(env=env))
             request_converter = await self.container.get(RequestConverter)
             response_converter = await self.container.get(ResponseConverter)
 
@@ -33,6 +60,7 @@ class App(ServiceProvider):
 
     def on_scheduled(self):
         async def handler(controller, env, ctx):
-            raise NotImplementedError()
+            self.container.set(CloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
+            await self.kernel.cron()
 
         return handler

@@ -1,5 +1,7 @@
 import json
 from typing import Any
+
+from miniapi.cron import CronEvent
 from miniapi.di import Container
 from miniapi.event import Event, EventDispatcher
 from miniapi.http import Response, Request
@@ -80,6 +82,15 @@ class HttpKernel:
         if not self.is_booted:
             self.is_booted = True
             await (await self.container.get(EventDispatcher)).dispatch(BootedEvent(self))
+
+    async def cron(self):
+        await self.boot()
+        container = self.container.build()
+
+        async def dispatch(_):
+            await (await container.get(EventDispatcher)).dispatch(_)
+
+        await dispatch(CronEvent())
 
     async def handle(self, request: Request) -> Response:
         await self.boot()
