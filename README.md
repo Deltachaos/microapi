@@ -15,7 +15,6 @@ MicroAPI is a minimalistic Python micro-framework designed to create Function-as
 MicroAPI is designed to be used as a Git submodule in your Cloudflare Worker projects.
 
 ```sh
-cd src
 git submodule add https://github.com/Deltachaos/microapi microapi
 ```
 
