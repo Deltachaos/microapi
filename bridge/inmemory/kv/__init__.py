@@ -1,30 +1,24 @@
-from typing import Any
-
-from microapi.bridge.cloudflare.util import to_py, to_js
+from microapi.bridge import CloudContext
 from microapi.kv import Store as FrameworkStore, StoreManager as FrameworkStoreManager, StoreReference as FrameworkStoreReference
-
-from microapi.bridge.cloudflare import CloudContext
 
 
 class Store(FrameworkStore):
     store = None
 
-    def __init__(self, store: Any):
+    def __init__(self, store: dict):
         self.store = store
 
     async def get(self, key: str) -> str:
-        result = await self.store.get(key)
-        return to_py(result)
+        return self.store.get(key)
 
     async def put(self, key: str, value: str) -> None:
-        await self.store.put(key, to_js(value))
+        self.store[key] = value
 
     async def delete(self, key: str) -> None:
-        await self.store.delete(to_js(key))
+        self.store.pop(key, None)
 
     async def list(self) -> list[str]:
-        result = await self.store.list()
-        return to_py(result)
+        return list(self.store.keys())
 
 
 class StoreReference(FrameworkStoreReference):
@@ -33,8 +27,13 @@ class StoreReference(FrameworkStoreReference):
 
 
 class StoreManager(FrameworkStoreManager):
+    stores = {}
+
     def __init__(self, context: CloudContext):
         self.context = context
 
     async def get(self, reference: StoreReference) -> Store:
-        return Store(self.context.binding(reference.name))
+        name = reference.name
+        if name not in StoreManager.stores:
+            StoreManager.stores[name] = {}
+        return Store(StoreManager.stores[name])

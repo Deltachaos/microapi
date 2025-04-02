@@ -1,7 +1,7 @@
 from urllib.parse import urlencode, urljoin, parse_qs, urlparse
 import json as _json
 from typing import Any, Optional
-from util import logger
+from microapi.util import logger
 
 
 class Request:
@@ -78,6 +78,15 @@ class JsonResponse(Response):
         return await self.json()
 
 
+
+class RedirectResponse(Response):
+    def __init__(self, url, status_code=302, headers=None):
+        if headers is None:
+            headers = {}
+        headers["Location"] = url
+        super().__init__("", headers, status_code)
+
+
 class ClientRequest(Request):
     def __init__(self, url: str, method: str = "GET", headers: dict = None, body: str = ""):
         super().__init__()
@@ -87,6 +96,8 @@ class ClientRequest(Request):
         self.url = urlparse(url)
         self._body = body
 
+    async def body(self):
+        return self._body
 
 class ClientResponse(Response):
     pass

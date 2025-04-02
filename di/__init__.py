@@ -111,9 +111,9 @@ class Container:
             if param_name in args_dict:
                 resolved_args[param_name] = args_dict[param_name]
             elif param_type is not inspect.Parameter.empty:
-                service = None
-                if self.has(param_type):
-                    service = await self.get(param_type)
+                if not self.has(param_type):
+                    raise RuntimeError(f"Argument '{param_name}' has no registered service '{param_type}'")
+                service = await self.get(param_type)
                 resolved_args[param_name] = service
 
         return await call_async(func, **resolved_args)

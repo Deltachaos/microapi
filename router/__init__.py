@@ -5,37 +5,37 @@ from microapi.http import Request
 from microapi.util import logger
 
 
-def route(_route: str):
+def route(_route: str, method: str = "GET"):
     def decorator(func: Callable):
         if not hasattr(func, "_routes"):
             func._routes = []
-        func._routes.append(_route)
+        func._routes.append((_route, method))
         return func
     return decorator
 
 
 def get(_route: str):
-    raise NotImplementedError()
+    return route(_route, "GET")
 
 
 def post(_route: str):
-    raise NotImplementedError()
+    return route(_route, "POST")
 
 
-def options(_route: str):
-    raise NotImplementedError()
+def option(_route: str):
+    return route(_route, "OPTION")
 
 
 def delete(_route: str):
-    raise NotImplementedError()
+    return route(_route, "DELETE")
 
 
 def put(_route: str):
-    raise NotImplementedError()
+    return route(_route, "PUT")
 
 
 def patch(_route: str):
-    raise NotImplementedError()
+    return route(_route, "PATCH")
 
 
 class Router:
@@ -47,9 +47,9 @@ class Router:
             for method_name in dir(cls):
                 attr = getattr(cls, method_name)
                 if callable(attr) and hasattr(attr, "_routes"):
-                    for route in attr._routes:
+                    for route, http_method in attr._routes:
                         regex, param_names = self._convert_route_to_regex(route)
-                        yield regex, cls, method_name, param_names
+                        yield http_method, regex, cls, method_name, param_names
 
     def _convert_route_to_regex(self, route: str) -> Tuple[re.Pattern, list[str]]:
         """
@@ -65,8 +65,10 @@ class Router:
         Returns the handler function and a dictionary of extracted parameters.
         """
         path = request.path
-        for regex, cls, method_name, param_names in self.routes():
-            logger(__name__).debug(f"Match path {path} against {regex}")
+        for http_method, regex, cls, method_name, param_names in self.routes():
+            logger(__name__).debug(f"Match path {http_method} {path} against {regex}")
+            if request.method != http_method:
+                continue
             match = regex.match(path)
             if match:
                 logger(__name__).debug(f"Matched route {cls}.{method_name}")

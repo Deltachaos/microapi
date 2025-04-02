@@ -1,5 +1,6 @@
 from typing import Any
 from microapi.http import Request, Response
+from microapi.kv import StoreReference
 
 
 class RequestConverter:
@@ -21,6 +22,12 @@ class ResponseConverter:
 class CloudContext:
     def __init__(self, ):
         self.provider_name = None
+
+    async def kv_store_reference(self, arguments) -> StoreReference:
+        raise NotImplementedError()
+
+    async def env(self, name, default=None) -> str|None:
+        raise NotImplementedError()
 
     async def raw(self) -> dict:
         return {}

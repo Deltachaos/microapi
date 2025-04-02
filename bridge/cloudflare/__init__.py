@@ -2,13 +2,13 @@ from typing import Any
 
 from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
 from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
-from microapi.bridge.cloudflare.kv import StoreManager as BridgeStoreManager
+from microapi.bridge.cloudflare.kv import StoreManager as BridgeStoreManager, StoreReference
 from microapi.di import Container, ServiceProvider
 from microapi.bridge import CloudContext as FrameworkCloudContext
 from microapi.kernel import HttpKernel as FrameworkHttpKernel
 from microapi.http import ClientExecutor
 
-from miniapi.kv import StoreManager
+from microapi.kv import StoreManager
 
 
 class CloudContext(FrameworkCloudContext):
@@ -23,6 +23,17 @@ class CloudContext(FrameworkCloudContext):
 
     async def raw(self) -> dict:
         return self._raw
+
+    async def kv_store_reference(self, arguments) -> StoreReference:
+        if "name" not in arguments:
+            raise ValueError("Name must be specified")
+        return StoreReference(arguments["name"])
+
+    async def env(self, name: str, default=None) -> str|None:
+        try:
+            return await self.binding(name)
+        except RuntimeError:
+            return default
 
     async def binding(self, name: str) -> Any:
         if self._raw["env"] is None:
@@ -50,9 +61,11 @@ class App(ServiceProvider):
         yield RequestConverter, lambda _: BridgeRequestConverter()
         yield ResponseConverter, lambda _: BridgeResponseConverter()
         yield ClientExecutor, lambda _: BridgeClientExecutor()
+
         async def store_manager_factory(_):
             context = await _.get(CloudContext)
             return BridgeStoreManager(context)
+
         yield StoreManager, store_manager_factory
 
     def on_fetch(self):
