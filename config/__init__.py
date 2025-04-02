@@ -4,7 +4,7 @@ from microapi.event_subscriber import RoutingEventSubscriber, SecurityEventSubsc
 from microapi.router import Router
 from microapi.http import Client, ClientFactory
 from microapi.di import Container
-from microapi.security import Security, TokenStore, Firewall
+from microapi.security import Security, TokenStore, Firewall, DefaultVoter
 
 
 class FrameworkServiceProvider(ServiceProvider):
@@ -24,12 +24,16 @@ class FrameworkServiceProvider(ServiceProvider):
 
 
 class SecurityServiceProvider(ServiceProvider):
+    def __init__(self, firewall_paths = None):
+        self.firewall_paths = firewall_paths
+
     def services(self):
         # Security
         yield TokenStore
-        yield Firewall, SecurityServiceProvider.firewall_factory
+        yield Firewall, SecurityServiceProvider.firewall_factory(self.firewall_paths)
         yield Security, SecurityServiceProvider.security_factory
         yield SecurityEventSubscriber
+        yield DefaultVoter
 
     @staticmethod
     async def security_factory(_: Container) -> Security:
@@ -37,7 +41,18 @@ class SecurityServiceProvider(ServiceProvider):
         return Security(token_store, _.tagged_generator('security_voter'))
 
     @staticmethod
-    async def firewall_factory(_: Container) -> Firewall:
-        security = await _.get(Security)
-        token_store = await _.get(TokenStore)
-        return Firewall(security, token_store, _.tagged_generator('token_resolver'))
+    def firewall_factory(paths = None):
+        if paths is None:
+            paths = {}
+
+        async def firewall_factory(_: Container) -> Firewall:
+            security = await _.get(Security)
+            token_store = await _.get(TokenStore)
+            firewall = Firewall(security, token_store, _.tagged_generator('token_resolver'))
+
+            for path, role in paths.items():
+                await firewall.add(path, role)
+
+            return firewall
+
+        return firewall_factory

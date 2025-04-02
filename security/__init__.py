@@ -2,6 +2,7 @@ import re
 from enum import Enum
 from typing import Any
 
+from microapi.di import tag
 from microapi.http import Request
 
 
@@ -46,6 +47,22 @@ class Voter:
         return VoterResult.ACCESS_ABSTAIN
 
 
+@tag('security_voter')
+class DefaultVoter(Voter):
+    async def supports(self, permission: str, subject: Any) -> bool:
+        return True
+
+    async def vote(self, token: Token | None, permission: str, subject: Any) -> VoterResult:
+        if token is None:
+            return VoterResult.ACCESS_DENIED
+
+        roles = token.roles()
+        if permission in roles:
+            return VoterResult.ACCESS_GRANTED
+
+        return VoterResult.ACCESS_DENIED
+
+
 class Security:
     def __init__(self, token_store: TokenStore, voters = None):
         if voters is None:
@@ -77,9 +94,13 @@ class Firewall:
         self._security = security
         self._token_store = token_store
         self._token_resolvers = token_resolvers
+        self._list = {}
+
+    async def add(self, path, role = None):
+        self._list[path] = role
 
     async def list(self) -> dict:
-        return {}
+        return self._list
 
     async def authenticate(self, request: Request):
         for _, service_get in self._token_resolvers():
