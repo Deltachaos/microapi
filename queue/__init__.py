@@ -33,12 +33,16 @@ class BatchMessageHandler:
 
 
 class Queue:
-    def set_message_handler(self, handler: BatchMessageHandler):
-        raise NotImplementedError()
-
     async def send(self, data: dict):
         raise NotImplementedError()
 
+
+class ConsumableQueue(Queue):
+    def set_message_handler(self, handler: BatchMessageHandler):
+        raise NotImplementedError()
+
+
+class PullQueue(ConsumableQueue):
     async def process(self):
         raise NotImplementedError()
 
@@ -81,7 +85,7 @@ class KVMessageBatch(MessageBatch):
         await asyncio.gather(*(msg.retry() for msg in self.messages if not msg._acked and not msg._retried))
 
 
-class KVQueue(Queue):
+class KVQueue(PullQueue):
     def __init__(self, store: JSONStore, max_retries=3, batch_size: int = 50):
         self.store = store
         self.max_retries = max_retries
