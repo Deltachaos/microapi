@@ -9,15 +9,16 @@ from microapi.http import Request, Response, ClientRequest, ClientResponse as Fr
 
 class FrameworkCloudflareRequest(Request):
     def __init__(self, request):
-        super().__init__()
+        url = to_py(request.url)
+        method = to_py(request.method)
+        headers = {}
+        for k, v in request.headers:
+            headers[k.lower()] = to_py(v)
+
+        super().__init__(url=url, method=method, headers=headers)
         self.body = None
         self._body = None
         self._request = request
-        self.method = to_py(request.method)
-        self.headers = {}
-        for k, v in request.headers:
-            self.headers[k.lower()] = to_py(v)
-        self.url = urlparse(self._request.url)
 
     async def body(self):
         if self._body is not None:
@@ -39,15 +40,16 @@ class ResponseConverter(BridgeResponseConverter):
         raise NotImplementedError()
 
     async def from_microapi(self, _: Response) -> CloudflareResponse:
-        return CloudflareResponse(await _.body(), _.status_code, headers=_.headers)
+        return CloudflareResponse(await _.body(), _.status_code, headers=_.headers.as_dict())
 
 
 class ClientResponse(FrameworkClientResponse):
     def __init__(self, response):
         super().__init__()
-        self.headers = {}
+        headers = {}
         for k, v in response.headers:
-            self.headers[k.lower()] = to_py(v)
+            headers[k.lower()] = to_py(v)
+        self.headers = Headers.create_from(headers)
         self.status_code = to_py(response.status)
         self._body = response
 
@@ -64,7 +66,7 @@ class ClientExecutor(FrameworkClientExecutor):
     async def do_request(self, request: ClientRequest) -> FrameworkClientResponse:
         options = {
             "method": request.method,
-            "headers": request.headers
+            "headers": request.headers.as_dict()
         }
 
         if request.body:

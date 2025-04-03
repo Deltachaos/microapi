@@ -40,7 +40,7 @@ class Container:
         """Create a new container instance with fresh instances."""
         return Container(copy.deepcopy(self._services))
 
-    def has(self, name):
+    async def has(self, name):
         return name in self._services
 
     async def get(self, name):
@@ -48,7 +48,7 @@ class Container:
         if name in self._instances:
             return self._instances[name]
 
-        if not self.has(name):
+        if not await self.has(name):
             raise ValueError(f"Service '{name}' not found")
 
         provider = self._services.get(name)
@@ -111,7 +111,7 @@ class Container:
             if param_name in args_dict:
                 resolved_args[param_name] = args_dict[param_name]
             elif param_type is not inspect.Parameter.empty:
-                if not self.has(param_type):
+                if not await self.has(param_type):
                     raise RuntimeError(f"Argument '{param_name}' has no registered service '{param_type}'")
                 service = await self.get(param_type)
                 resolved_args[param_name] = service

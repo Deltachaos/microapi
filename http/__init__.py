@@ -1,16 +1,29 @@
 from urllib.parse import urlencode, urljoin, parse_qs, urlparse
 import json as _json
 from typing import Any, Optional
-from microapi.util import logger
+from microapi.util import logger, CaseInsensitiveDict
 
+class Headers(CaseInsensitiveDict):
+    @staticmethod
+    def create_from(items: dict|CaseInsensitiveDict = None):
+        if items is None:
+            items = {}
+
+        if isinstance(items, Headers):
+            return items.copy()
+
+        obj = Headers()
+        for k, v in items.items():
+            obj[k] = v
+        return obj
 
 class Request:
-    def __init__(self):
-        self.attributes = {}
-        self.headers = {}
-        self.method = "GET"
-        self.url = None
-        self._body = ""
+    def __init__(self, url: str = '', method: str = 'GET', body: str = "", headers: dict|Headers = None, attributes: dict = None):
+        self.attributes = attributes or {}
+        self.headers = Headers.create_from(headers)
+        self.method = method
+        self.url = urlparse(url)
+        self._body = body
         self._json = None
 
     async def body(self) -> str:
@@ -44,8 +57,8 @@ class Request:
 
 
 class Response:
-    def __init__(self, body="", headers=None, status_code=200):
-        self.headers = headers or {}
+    def __init__(self, body="", headers: dict|Headers=None, status_code=200):
+        self.headers = Headers.create_from(headers)
         self._body = body
         self.status_code = status_code
 
@@ -65,12 +78,12 @@ class Response:
         return _json.dumps(self._body)
 
     def __str__(self):
-        return f"Response : status_code={self.status_code} headers={_json.dumps(self.headers)} body={_json.dumps(self._body)}"
+        return f"Response : status_code={self.status_code} headers={str(self.headers)} body={_json.dumps(self._body)}"
 
 
 class JsonResponse(Response):
-    def __init__(self, body="", headers=None, status_code=200):
-        headers = headers or {}
+    def __init__(self, body="", headers: dict|Headers=None, status_code=200):
+        headers = Headers.create_from(headers)
         headers["Content-Type"] = "application/json"
         super().__init__(body, headers, status_code)
 
@@ -80,24 +93,15 @@ class JsonResponse(Response):
 
 
 class RedirectResponse(Response):
-    def __init__(self, url, status_code=302, headers=None):
-        if headers is None:
-            headers = {}
+    def __init__(self, url, status_code=302, headers: dict|Headers=None):
+        headers = Headers.create_from(headers)
         headers["Location"] = url
         super().__init__("", headers, status_code)
 
 
 class ClientRequest(Request):
-    def __init__(self, url: str, method: str = "GET", headers: dict = None, body: str = ""):
-        super().__init__()
-        self.headers = headers or {}
-        self.attributes = None
-        self.method = method
-        self.url = urlparse(url)
-        self._body = body
-
-    async def body(self):
-        return self._body
+    def __init__(self, url: str, method: str = "GET", headers: dict|Headers = None, body: str = ""):
+        super().__init__(url=url, method=method, headers=headers, body=body)
 
 class ClientResponse(Response):
     pass
@@ -109,17 +113,20 @@ class ClientExecutor:
 
 
 class Client:
-    def __init__(self, headers: dict = None, executor: ClientExecutor = None):
-        self.headers = headers or {}
+    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None):
+        self.headers = Headers.create_from(headers)
         self.executor = executor
 
     async def request(self, url: str, method: str = "GET", params: dict = None, data: dict | str = None, json=None,
-                      headers: dict = None) -> ClientResponse:
+                      headers: dict|Headers = None) -> ClientResponse:
+        headers = Headers.create_from(headers)
         if params:
             url = urljoin(url, "?" + urlencode(params, doseq=True))
 
-        updated_headers = {**self.headers}
-        updated_headers.update(headers)
+
+        updated_headers = self.headers.copy()
+        for k, v in headers.items():
+            updated_headers[k] = v
 
         body = ""
         if json is not None:

@@ -7,7 +7,7 @@ class ClientExecutor(FrameworkClientExecutor):
         conn = http_client.HTTPSConnection(url.netloc) if url.scheme == "https" else http_client.HTTPConnection(
             url.netloc)
 
-        headers = request.headers
+        headers = request.headers.as_dict()
         body_str = await request.body()
         body = body_str.encode("utf-8") if body_str else None
 

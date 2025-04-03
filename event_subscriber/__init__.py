@@ -3,7 +3,8 @@ import inspect
 
 from microapi.di import tag, Container
 from microapi.event import listen
-from microapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException
+from microapi.http import JsonResponse
+from microapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException, ViewEvent
 from microapi.router import Router
 from microapi.security import Security, Firewall
 
@@ -57,4 +58,12 @@ class SecurityEventSubscriber:
     async def firewall(self, event: RequestEvent):
         if not await self._firewall.is_granted(event.request):
             raise HttpException(401, f"Access denied")
+
+
+@tag('event_subscriber')
+class SerializeEventSubscriber:
+    @listen(ViewEvent)
+    async def serialize(self, event: ViewEvent):
+        if event.response is None:
+            event.response = JsonResponse(event.controller_result)
 
