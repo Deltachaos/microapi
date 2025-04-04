@@ -70,6 +70,10 @@ class JwtToken(Token):
         if sub:
             self.sub = sub
 
+    @property
+    def token(self) -> str:
+        return self._raw
+
     def user_identifier(self) -> Any:
         if self._user is not None:
             return super().user_identifier()

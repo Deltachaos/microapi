@@ -1,4 +1,4 @@
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlunparse
 from js import fetch, Headers, Response, Object
 from workers import Response as CloudflareResponse, Request as CloudflareRequest
 

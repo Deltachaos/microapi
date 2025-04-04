@@ -3,8 +3,6 @@ from typing import Any
 from microapi.bridge.cloudflare.util import to_py, to_js
 from microapi.kv import Store as FrameworkStore, StoreManager as FrameworkStoreManager, StoreReference as FrameworkStoreReference
 
-from microapi.bridge.cloudflare import CloudContext
-
 
 class Store(FrameworkStore):
     store = None
@@ -34,7 +32,7 @@ class StoreReference(FrameworkStoreReference):
 
 
 class StoreManager(FrameworkStoreManager):
-    def __init__(self, context: CloudContext):
+    def __init__(self, context: 'microapi.bridge.cloudflare.CloudContext'):
         self.context = context
 
     async def get(self, reference: StoreReference) -> Store:
