@@ -16,8 +16,8 @@ class Store:
     async def delete(self, key: str) -> None:
         raise NotImplementedError()
 
-    async def list(self) -> list[str]:
-        raise NotImplementedError()
+    async def list(self):
+        yield
 
 
 class JSONStore:
@@ -45,8 +45,9 @@ class JSONStore:
     async def delete(self, key: str) -> None:
         await self.decorated.delete(key)
 
-    async def list(self) -> list[str]:
-        return await self.decorated.list()
+    async def list(self):
+        async for key in self.decorated.list():
+            yield key
 
 
 class StoreReference:

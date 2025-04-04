@@ -17,8 +17,9 @@ class Store(FrameworkStore):
     async def delete(self, key: str) -> None:
         self.store.pop(key, None)
 
-    async def list(self) -> list[str]:
-        return list(self.store.keys())
+    async def list(self):
+        for key in list(self.store.keys()):
+            yield key
 
 
 class StoreReference(FrameworkStoreReference):

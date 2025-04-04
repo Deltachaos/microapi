@@ -22,9 +22,10 @@ class Store(FrameworkStore):
     async def delete(self, key: str) -> None:
         await self.store.delete(to_js(key))
 
-    async def list(self) -> list[str]:
+    async def list(self):
         result = await self.store.list()
-        return to_py(result)
+        for key in to_py(result):
+            yield key
 
 
 class StoreReference(FrameworkStoreReference):

@@ -2,7 +2,7 @@ import uuid
 import asyncio
 from typing import List
 
-from microapi.kv import JSONStore
+from microapi.kv import JSONStore, Store
 
 
 class Message:
@@ -18,7 +18,7 @@ class Message:
 
 class MessageBatch:
     async def messages(self):
-        raise NotImplementedError()
+        yield
 
     async def ack_all(self):
         raise NotImplementedError()
@@ -73,21 +73,22 @@ class KVMessage(Message):
 
 class KVMessageBatch(MessageBatch):
     def __init__(self, messages: List[KVMessage]):
-        self.messages = messages
+        self._messages = messages
 
     async def messages(self):
-        return self.messages
+        for message in self._messages:
+            yield message
 
     async def ack_all(self):
-        await asyncio.gather(*(msg.ack() for msg in self.messages if not msg._acked and not msg._retried))
+        await asyncio.gather(*(msg.ack() for msg in self._messages if not msg._acked and not msg._retried))
 
     async def retry_all(self):
-        await asyncio.gather(*(msg.retry() for msg in self.messages if not msg._acked and not msg._retried))
+        await asyncio.gather(*(msg.retry() for msg in self._messages if not msg._acked and not msg._retried))
 
 
 class KVQueue(PullQueue):
-    def __init__(self, store: JSONStore, max_retries=3, batch_size: int = 50):
-        self.store = store
+    def __init__(self, store: Store, max_retries=3, batch_size: int = 50):
+        self.store = JSONStore(store)
         self.max_retries = max_retries
         self.batch_size = batch_size
         self.handler = None
@@ -109,7 +110,7 @@ class KVQueue(PullQueue):
 
         i = 0
         messages = []
-        for key in await self.store.list():
+        async for key in self.store.list():
             i = i + 1
             if i > self.batch_size:
                 break
