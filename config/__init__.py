@@ -1,6 +1,7 @@
 from microapi.di import ServiceProvider
 from microapi.event import EventDispatcher
-from microapi.event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber
+from microapi.event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber, \
+    CorsEventSubscriber
 from microapi.router import Router
 from microapi.http import Client, ClientFactory
 from microapi.di import Container
@@ -9,14 +10,22 @@ from microapi.security import Security, TokenStore, Firewall, DefaultVoter, JwtT
 
 
 class FrameworkServiceProvider(ServiceProvider):
+    def __init__(self, cors_origin: str = None, cors_methods: list[str] = None, cors_headers: list[str] = None):
+        self._cors_origin = cors_origin
+        self._cors_methods = cors_methods
+        self._cors_headers = cors_headers
+
     def services(self):
         # HTTP
         yield Router, lambda _: Router(_.tagged_generator('controller'))
         yield EventDispatcher, lambda _: EventDispatcher(_.tagged_generator('event_subscriber'))
+        if self._cors_origin is not None:
+            yield CorsEventSubscriber, lambda _: CorsEventSubscriber(self._cors_origin, self._cors_methods, self._cors_headers)
         yield RoutingEventSubscriber
         yield SerializeEventSubscriber
 
         # Util
+        yield ClientFactory
         yield Client, FrameworkServiceProvider.client_factory
 
     @staticmethod

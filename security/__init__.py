@@ -238,7 +238,7 @@ class Firewall:
         for pattern, role in items.items():
             if re.match(pattern, path):
                 if role is None:
-                    return
+                    return True
                 return await self._security.is_granted(request, role)
 
         return False

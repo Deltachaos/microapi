@@ -29,13 +29,6 @@ class JwtAccessToken(JwtToken):
 
 
 class OAuthControllerConfig:
-    client_id = None
-    client_secret = None
-    authorization_url = None
-    token_url = None
-    redirect_uri = None
-    scope = None
-
     def __init__(self, client_id, client_secret, authorization_url, token_url, redirect_uri, scope="openid"):
         self.client_id = client_id
         self.client_secret = client_secret
