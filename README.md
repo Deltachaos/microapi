@@ -1,3 +1,5 @@
+from microapi import QueueBinding
+
 # microapi
 
 MicroAPI is a minimalistic Python micro-framework designed to create Function-as-a-Service (FaaS) applications on Cloudflare Workers. It follows the Keep It Simple, Stupid (KISS) principle to enable lightweight, structured web applications within Cloudflare's Python environment.
@@ -35,29 +37,74 @@ from microapi.bridge.cloudflare import App
 from microapi.config import FrameworkServiceProvider
 from microapi.di import tag, ServiceProvider
 from microapi.bridge import CloudContext
-from microapi.bridge.cloudflare import CloudContext as CloudflareCloudContext
-from microapi.bridge.cloudflare.util import to_py
-from microapi.http import Response
+from microapi.kv import JSONStore
+from microapi.http import Request, Response, JsonResponse
 from microapi.router import route
+from microapi.queue import QueueBinding, BatchMessageHandler, Queue, MessageBatch
+from microapi import CloudContextQueueBindingFactory
 
+
+@tag('queue')
+class MyQueue(QueueBinding):
+    pass
+
+
+@tag("queue_message_handler")
+class MyBatchHandler(BatchMessageHandler):
+    async def supports(self, queue: Queue) -> bool:
+        return isinstance(queue, MyQueue)
+
+    async def handle(self, batch: MessageBatch, queue: Queue):
+        async for message in batch.messages():
+            data = await message.get()
+            try:
+                print(f"Some {data}")
+                await message.ack()
+            except Exception as e:
+                await message.retry()
+
+                
 @tag('controller')
 class MyController:
-    def __init__(self, context: CloudflareCloudContext):
+    def __init__(self, context: CloudContext):
         self.context = context
-    
-    @route('/some/{data}')
-    async def action(self, data: str):
-        store = await self.context.binding("SOME_KV_STORE")
-        store_data = to_py(await store.get(data))
-        return Response(f"data {store_data}")
 
+    @route('/some/{key}')
+    async def action(self, request: Request, key: str):
+        store = JSONStore(await self.context.kv({"name": "SOME_KV_STORE"}))
+
+        if request.method == "POST":
+            body_data = await request.json()
+            # equivalent to  
+            # data = json.loads(await request.body())
+            await store.put(key, body_data)
+            
+        store_data = await store.get(key)
+        return JsonResponse(store_data, status_code=201 if request.method == "POST" else 200, headers={
+            "X-Some-Examle": "123"
+        })
+
+    @route('/some/{key}')
+    async def queue(self, q: MyQueue):
+        await q.send({
+            "some": "data"
+        })
+        return Response(status_code=204)
+
+    
 class AppServiceProvider(ServiceProvider):
     def services(self):
+        # for cloudflare queues are currently only supported by KV and Cron
+        # so name is a KV store in this case
+        yield MyQueue, CloudContextQueueBindingFactory.create(MyQueue, {"name": "SOME_QUEUE"})
+        yield MyBatchHandler
         yield MyController
+
 
 def service_providers():
     yield FrameworkServiceProvider()
     yield AppServiceProvider()
+
 
 app = App(service_providers=service_providers())
 on_fetch = app.on_fetch()
@@ -80,7 +127,7 @@ kv_namespaces = [
 
 ## Full Application Example
 
-This example can be run localy for testing. It does not use the cloudflare entrypoint, but instead mocks a `Request` object.
+This example can be run locally for testing. It does not use the cloudflare entrypoint, but instead mocks a `Request` object.
 
 ```python
 import asyncio
