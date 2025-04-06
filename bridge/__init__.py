@@ -1,7 +1,8 @@
 from typing import Any
 from microapi.http import Request, Response
-from microapi.kv import Store
+from microapi.kv import Store, DatabaseStore
 from microapi.queue import Queue, KVQueue
+from microapi.sql import Database
 
 
 class RequestConverter:
@@ -24,8 +25,15 @@ class CloudContext:
     def __init__(self, ):
         self.provider_name = None
 
-    async def kv(self, arguments) -> Store:
+    async def sql(self, arguments) -> Database:
         raise NotImplementedError()
+
+    async def kv(self, arguments) -> Store:
+        table = arguments["table"] if "table" in arguments else "kv"
+        key_column = arguments["key_column"] if "key_column" in arguments else "_key"
+        value_column = arguments["value_column"] if "value_column" in arguments else "_value"
+
+        return DatabaseStore(await self.sql(arguments), table, key_column, value_column)
 
     async def queue(self, arguments) -> Queue:
         return KVQueue(await self.kv(arguments))

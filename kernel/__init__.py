@@ -141,6 +141,7 @@ class HttpKernel:
             logger(__name__).debug(f"Responding with {response_event.response}")
             return response_event.response
         except Exception as e:
+            raise e
             exception_event = ExceptionEvent(request, e)
             await dispatch(exception_event)
             response = exception_event.response or HttpException(str(e), status_code=500).to_response()

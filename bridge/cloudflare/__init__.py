@@ -3,11 +3,13 @@ from typing import Any
 from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
 from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
 from microapi.bridge.cloudflare.kv import Store
+from microapi.bridge.cloudflare.sql import Database
 from microapi.bridge.cloudflare.util import to_py
 from microapi.di import Container, ServiceProvider
 from microapi.bridge import CloudContext as FrameworkCloudContext
 from microapi.kernel import HttpKernel as FrameworkHttpKernel
 from microapi.http import ClientExecutor
+from microapi.kv import DatabaseStore
 from microapi.queue import KVQueue, Queue
 
 
@@ -28,6 +30,22 @@ class CloudContext(FrameworkCloudContext):
         if "name" not in arguments:
             raise ValueError("Name must be specified")
         return Store(await self.binding(arguments["name"]))
+
+    async def sql(self, arguments) -> Database:
+        if "name" not in arguments:
+            raise ValueError("Name must be specified")
+        return Database(await self.binding(arguments["name"]))
+
+    async def queue(self, arguments) -> Queue:
+        if "table" in arguments:
+            table = arguments["table"]
+            key_column = arguments["key_column"] if "key_column" in arguments else "_key"
+            value_column = arguments["value_column"] if "value_column" in arguments else "_value"
+            store = DatabaseStore(await self.sql(arguments), table, key_column, value_column)
+        else:
+            store = await self.kv(arguments)
+
+        return KVQueue(store)
 
     async def env(self, name: str, default=None) -> str|None:
         try:

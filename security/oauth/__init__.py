@@ -13,7 +13,7 @@ class JwtAccessToken(JwtToken):
 
         super().__init__(data.get('id_token'))
 
-    def refreshed_access_token(self):
+    async def refreshed_access_token(self):
         return self.access_token
 
     def parse_scope(self):

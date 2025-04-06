@@ -208,13 +208,10 @@ class QueueProcessor:
 
     async def process(self, batch_size: int = 0):
         handled = 0
-        handled_last_batch = None
-        while batch_size == 0 or (handled_last_batch is None and batch_size < handled):
-            handled_last_batch = None
+        handled_last_batch = 1
+        while handled_last_batch > 0 and (batch_size == 0 or batch_size < handled):
+            handled_last_batch = 0
             async for queue, messages in self.pull():
                 await self._handler_manager.handle(messages, queue)
                 handled_last_batch = await messages.consumed_count()
-
-            if handled_last_batch is None or handled_last_batch <= 0:
-                break
             handled += handled_last_batch
