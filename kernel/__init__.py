@@ -83,18 +83,25 @@ class HttpKernel:
             self.is_booted = True
             await (await self.container.get(EventDispatcher)).dispatch(BootedEvent(self))
 
-    async def cron(self):
+    async def cron(self, container_builder=None):
         await self.boot()
         container = self.container.build()
+        if container_builder is not None:
+            await container_builder(container)
 
         async def dispatch(_):
             await (await container.get(EventDispatcher)).dispatch(_)
 
-        await dispatch(CronEvent())
+        event = CronEvent()
+        event.actions = ["queue"]
+        await dispatch(event)
 
-    async def handle(self, request: Request) -> Response:
+    async def handle(self, request: Request, container_builder=None) -> Response:
         await self.boot()
         container = self.container.build()
+        if container_builder is not None:
+            await container_builder(container)
+
         logger(__name__).debug(f"Handling request {request} with {container.service_ids()}")
 
         async def dispatch(_):

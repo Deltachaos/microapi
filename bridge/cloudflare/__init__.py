@@ -2,13 +2,13 @@ from typing import Any
 
 from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
 from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
-from microapi.bridge.cloudflare.kv import StoreManager as BridgeStoreManager, StoreReference
+from microapi.bridge.cloudflare.kv import Store
+from microapi.bridge.cloudflare.util import to_py
 from microapi.di import Container, ServiceProvider
 from microapi.bridge import CloudContext as FrameworkCloudContext
 from microapi.kernel import HttpKernel as FrameworkHttpKernel
 from microapi.http import ClientExecutor
-
-from microapi.kv import StoreManager
+from microapi.queue import KVQueue, Queue
 
 
 class CloudContext(FrameworkCloudContext):
@@ -24,10 +24,10 @@ class CloudContext(FrameworkCloudContext):
     async def raw(self) -> dict:
         return self._raw
 
-    async def kv_store_reference(self, arguments) -> StoreReference:
+    async def kv(self, arguments) -> Store:
         if "name" not in arguments:
             raise ValueError("Name must be specified")
-        return StoreReference(arguments["name"])
+        return Store(await self.binding(arguments["name"]))
 
     async def env(self, name: str, default=None) -> str|None:
         try:
@@ -39,10 +39,12 @@ class CloudContext(FrameworkCloudContext):
         if self._raw["env"] is None:
             raise RuntimeError("Environment not set")
 
-        if name not in self._raw["env"]:
+        env = to_py(self._raw["env"])
+
+        if name not in env:
             raise RuntimeError(f"Binding {name} not available")
 
-        return self._raw["env"][name]
+        return env[name]
 
 
 class App(ServiceProvider):
@@ -62,27 +64,26 @@ class App(ServiceProvider):
         yield ResponseConverter, lambda _: BridgeResponseConverter()
         yield ClientExecutor, lambda _: BridgeClientExecutor()
 
-        async def store_manager_factory(_):
-            context = await _.get(CloudContext)
-            return BridgeStoreManager(context)
-
-        yield StoreManager, store_manager_factory
-
     def on_fetch(self):
         async def handler(request, env):
-            self.container.set(CloudContext, lambda _: CloudContext(env=env))
             request_converter = await self.container.get(RequestConverter)
             response_converter = await self.container.get(ResponseConverter)
 
+            async def container_builder(_: Container):
+                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env))
+
             converted = await request_converter.to_microapi(request)
-            response = await self.kernel.handle(converted)
+            response = await self.kernel.handle(converted, container_builder)
             return await response_converter.from_microapi(response)
 
         return handler
 
     def on_scheduled(self):
         async def handler(controller, env, ctx):
-            self.container.set(CloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
-            await self.kernel.cron()
+
+            async def container_builder(_: Container):
+                _.set(FrameworkCloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
+
+            await self.kernel.cron(container_builder)
 
         return handler

@@ -10,7 +10,7 @@ class Headers(CaseInsensitiveDict):
             items = {}
 
         if isinstance(items, Headers):
-            return items.copy()
+            items = items.as_dict()
 
         obj = Headers()
         for k, v in items.items():
@@ -36,8 +36,10 @@ class Request:
         return self._json
 
     @property
-    def content_type(self) -> Optional[str]:
-        return self.headers.get("content-type", None)
+    def content_type(self) -> Optional[str]:#
+        if "content-type" in self.headers:
+            return self.headers["content-type"]
+        return None
 
     @property
     def path(self) -> Optional[str]:
@@ -53,7 +55,11 @@ class Request:
         return {k: v[0] for k, v in query.items()}
 
     def __str__(self):
-        return f"Request : {self.method} {self.url}"
+        body = type(self._body)
+        if isinstance(self._body, str):
+            body = self._body
+
+        return f"Request : {self.method} {self.url} headers={_json.dumps(self.headers.as_dict())} body={body}"
 
 
 class Response:
@@ -63,8 +69,10 @@ class Response:
         self.status_code = status_code
 
     @property
-    def content_type(self) -> str:
-        return self.headers.get("content-type", "")
+    def content_type(self) -> Optional[str]:#
+        if "content-type" in self.headers:
+            return self.headers["content-type"]
+        return None
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -78,7 +86,11 @@ class Response:
         return _json.dumps(self._body)
 
     def __str__(self):
-        return f"Response : status_code={self.status_code} headers={str(self.headers)} body={_json.dumps(self._body)}"
+        body = type(self._body)
+        if isinstance(self._body, str):
+            body = self._body
+
+        return f"Response : status_code={self.status_code} headers={_json.dumps(self.headers.as_dict())} body={body}"
 
 
 class JsonResponse(Response):
@@ -123,18 +135,19 @@ class Client:
         if params:
             url = urljoin(url, "?" + urlencode(params, doseq=True))
 
-
-        updated_headers = self.headers.copy()
+        updated_headers = self.headers.as_dict()
         for k, v in headers.items():
             updated_headers[k] = v
 
         body = ""
         if json is not None:
             body = _json.dumps(json)
-            updated_headers.setdefault("content-type", "application/json;charset=UTF-8")
+            if "content-type" not in updated_headers:
+                updated_headers["content-type"] = "application/json;charset=UTF-8"
         elif data is not None:
             body = urlencode(data, doseq=True)
-            updated_headers.setdefault("content-type", "application/x-www-form-urlencoded;charset=UTF-8")
+            if "content-type" not in updated_headers:
+                updated_headers["content-type"] = "application/x-www-form-urlencoded;charset=UTF-8"
 
         client_request = ClientRequest(
             url,

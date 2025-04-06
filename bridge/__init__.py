@@ -1,6 +1,7 @@
 from typing import Any
 from microapi.http import Request, Response
-from microapi.kv import StoreReference
+from microapi.kv import Store
+from microapi.queue import Queue, KVQueue
 
 
 class RequestConverter:
@@ -23,8 +24,11 @@ class CloudContext:
     def __init__(self, ):
         self.provider_name = None
 
-    async def kv_store_reference(self, arguments) -> StoreReference:
+    async def kv(self, arguments) -> Store:
         raise NotImplementedError()
+
+    async def queue(self, arguments) -> Queue:
+        return KVQueue(await self.kv(arguments))
 
     async def env(self, name, default=None) -> str|None:
         raise NotImplementedError()

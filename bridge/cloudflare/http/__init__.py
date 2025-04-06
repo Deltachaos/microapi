@@ -1,10 +1,11 @@
 from urllib.parse import urlunparse
-from js import fetch, Headers, Response, Object
+from js import fetch, Response, Object
 from workers import Response as CloudflareResponse, Request as CloudflareRequest
 
 from microapi.bridge import RequestConverter as BridgeRequestConverter, ResponseConverter as BridgeResponseConverter
 from microapi.bridge.cloudflare.util import to_py, to_js
-from microapi.http import Request, Response, ClientRequest, ClientResponse as FrameworkClientResponse, ClientExecutor as FrameworkClientExecutor
+from microapi.http import Request, Response, ClientRequest, ClientResponse as FrameworkClientResponse, \
+    ClientExecutor as FrameworkClientExecutor, Headers
 
 
 class FrameworkCloudflareRequest(Request):
@@ -16,7 +17,6 @@ class FrameworkCloudflareRequest(Request):
             headers[k.lower()] = to_py(v)
 
         super().__init__(url=url, method=method, headers=headers)
-        self.body = None
         self._body = None
         self._request = request
 
@@ -48,17 +48,17 @@ class ClientResponse(FrameworkClientResponse):
         super().__init__()
         headers = {}
         for k, v in response.headers:
-            headers[k.lower()] = to_py(v)
+            headers[to_py(k).lower()] = to_py(v)
         self.headers = Headers.create_from(headers)
         self.status_code = to_py(response.status)
         self._body = response
 
     async def json(self):
-        proxy = await self._response.json()
+        proxy = await self._body.json()
         return to_py(proxy)
 
     async def body(self):
-        proxy = await self._response.text()
+        proxy = await self._body.text()
         return to_py(proxy)
 
 
@@ -69,8 +69,9 @@ class ClientExecutor(FrameworkClientExecutor):
             "headers": request.headers.as_dict()
         }
 
-        if request.body:
-            options["body"] = request.body
+        body = await request.body()
+        if body:
+            options["body"] = body
 
         url = urlunparse(request.url)
         result = await fetch(url, to_js(options))

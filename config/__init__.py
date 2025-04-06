@@ -1,12 +1,14 @@
 from microapi.di import ServiceProvider
 from microapi.event import EventDispatcher
 from microapi.event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber, \
-    CorsEventSubscriber
+    CorsEventSubscriber, QueueProcessEventSubscriber
+from microapi.queue import BatchMessageHandlerManager, QueueProcessor
 from microapi.router import Router
 from microapi.http import Client, ClientFactory
 from microapi.di import Container
 from microapi.security import Security, TokenStore, Firewall, DefaultVoter, JwtTokenResolver, UserResolver, \
     JwtUserResolver
+from microapi.workflow import WorkflowManager, WorkflowBatchHandler, QueueWorkflowManager
 
 
 class FrameworkServiceProvider(ServiceProvider):
@@ -24,6 +26,11 @@ class FrameworkServiceProvider(ServiceProvider):
         yield RoutingEventSubscriber
         yield SerializeEventSubscriber
 
+        # Queue
+        yield BatchMessageHandlerManager, lambda _: BatchMessageHandlerManager(_.tagged_generator('queue_message_handler'))
+        yield QueueProcessor, FrameworkServiceProvider.queue_processor_factory
+        yield QueueProcessEventSubscriber
+
         # Util
         yield ClientFactory
         yield Client, FrameworkServiceProvider.client_factory
@@ -32,6 +39,13 @@ class FrameworkServiceProvider(ServiceProvider):
     async def client_factory(_: Container) -> Client:
         client_factory = await _.get(ClientFactory)
         return client_factory.create()
+
+    @staticmethod
+    async def queue_processor_factory(_: Container) -> QueueProcessor:
+        return QueueProcessor(
+            _.tagged_generator('queue'),
+            await _.get(BatchMessageHandlerManager),
+        )
 
 
 class SecurityServiceProvider(ServiceProvider):
@@ -86,3 +100,18 @@ class SecurityServiceProvider(ServiceProvider):
             return firewall
 
         return factory
+
+class QueueWorkflowServiceProvider(ServiceProvider):
+    def __init__(self, queue_service):
+        self.queue_service = queue_service
+
+    def services(self):
+
+        async def workflow_manager_factory(_: Container) -> WorkflowManager:
+            queue = await _.get(self.queue_service)
+            return QueueWorkflowManager(queue, _.tagged_generator('workflow'))
+
+        # Workflows
+        yield WorkflowManager, workflow_manager_factory
+        yield WorkflowBatchHandler, lambda _: WorkflowBatchHandler( _.tagged_generator('workflow_manager'))
+

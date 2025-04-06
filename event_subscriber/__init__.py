@@ -1,12 +1,14 @@
 import copy
 import inspect
 
+from microapi.cron import CronEvent
 from microapi.di import tag, Container
 from microapi.event import listen
-from microapi.http import JsonResponse, RedirectResponse, Request, Response
+from microapi.http import JsonResponse, Request, Response
 from microapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException, ViewEvent, ResponseEvent
+from microapi.queue import QueueProcessor
 from microapi.router import Router
-from microapi.security import Security, Firewall
+from microapi.security import Firewall
 
 
 @tag('event_subscriber')
@@ -21,6 +23,10 @@ class RoutingEventSubscriber:
             result = self._router.match(event.request)
             if result is not None:
                 cls, method_name, params = result
+                if event.request.query is not None:
+                    for key, value in event.request.query.items():
+                        event.request.attributes[key] = copy.deepcopy(value)
+
                 for key, value in params.items():
                     event.request.attributes[key] = copy.deepcopy(value)
 
@@ -107,3 +113,14 @@ class SerializeEventSubscriber:
     async def serialize(self, event: ViewEvent):
         if event.response is None:
             event.response = JsonResponse(event.controller_result)
+
+
+@tag('event_subscriber')
+class QueueProcessEventSubscriber:
+    def __init__(self, processor: QueueProcessor):
+        self._processor = processor
+
+    @listen(CronEvent)
+    async def process(self, event: CronEvent):
+        if "queue" in event.actions:
+            await self._processor.process()

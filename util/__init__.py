@@ -42,6 +42,11 @@ class CaseInsensitiveDict:
     def __len__(self):
         return len(self._store)
 
+    def get(self, key, default=None):
+        if key in self:
+            return self[key]
+        return default
+
     def items(self):
         return (
             (keyval[0], keyval[1])

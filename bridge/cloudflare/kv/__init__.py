@@ -1,7 +1,7 @@
 from typing import Any
 
 from microapi.bridge.cloudflare.util import to_py, to_js
-from microapi.kv import Store as FrameworkStore, StoreManager as FrameworkStoreManager, StoreReference as FrameworkStoreReference
+from microapi.kv import Store as FrameworkStore
 
 
 class Store(FrameworkStore):
@@ -20,20 +20,15 @@ class Store(FrameworkStore):
     async def delete(self, key: str) -> None:
         await self.store.delete(to_js(key))
 
-    async def list(self):
-        result = await self.store.list()
-        for key in to_py(result):
-            yield key
-
-
-class StoreReference(FrameworkStoreReference):
-    def __init__(self, name: str):
-        self.name = name
-
-
-class StoreManager(FrameworkStoreManager):
-    def __init__(self, context: 'microapi.bridge.cloudflare.CloudContext'):
-        self.context = context
-
-    async def get(self, reference: StoreReference) -> Store:
-        return Store(self.context.binding(reference.name))
+    async def list(self, prefix: str = None):
+        if prefix is None:
+            result = await self.store.list()
+        else:
+            result = await self.store.list(to_js({ prefix: prefix }))
+        while result is not None:
+            for key in to_py(result.keys):
+                yield to_py(key["name"])
+            if result.list_complete:
+                result = None
+            else:
+                result = await self.store.list({ "cursor": result.cursor })

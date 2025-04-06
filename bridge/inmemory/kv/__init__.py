@@ -1,5 +1,5 @@
 from microapi.bridge import CloudContext
-from microapi.kv import Store as FrameworkStore, StoreManager as FrameworkStoreManager, StoreReference as FrameworkStoreReference
+from microapi.kv import Store as FrameworkStore
 
 
 class Store(FrameworkStore):
@@ -17,24 +17,17 @@ class Store(FrameworkStore):
     async def delete(self, key: str) -> None:
         self.store.pop(key, None)
 
-    async def list(self):
+    async def list(self, prefix: str = None):
         for key in list(self.store.keys()):
-            yield key
+            if prefix is None or key.startswith(prefix):
+                yield key
 
-
-class StoreReference(FrameworkStoreReference):
-    def __init__(self, name: str):
-        self.name = name
-
-
-class StoreManager(FrameworkStoreManager):
+class StoreManager:
     stores = {}
 
-    def __init__(self, context: CloudContext):
-        self.context = context
-
-    async def get(self, reference: StoreReference) -> Store:
-        name = reference.name
+    @staticmethod
+    async def get(reference) -> Store:
+        name = reference["name"]
         if name not in StoreManager.stores:
             StoreManager.stores[name] = {}
         return Store(StoreManager.stores[name])
