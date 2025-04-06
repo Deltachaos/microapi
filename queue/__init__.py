@@ -215,6 +215,6 @@ class QueueProcessor:
                 await self._handler_manager.handle(messages, queue)
                 handled_last_batch = await messages.consumed_count()
 
-            if handled_last_batch is None:
+            if handled_last_batch is None or handled_last_batch <= 0:
                 break
             handled += handled_last_batch
