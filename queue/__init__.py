@@ -1,16 +1,13 @@
+import hashlib
 import json
 import time
 import uuid
 import asyncio
 from typing import List
 
+from microapi.event import Event
 from microapi.kv import JSONStore, Store
 from microapi.util import logger
-
-
-class Queue:
-    async def send(self, data: dict):
-        raise NotImplementedError()
 
 
 class Message:
@@ -35,6 +32,19 @@ class MessageBatch:
         raise NotImplementedError()
 
     async def retry_all(self):
+        raise NotImplementedError()
+
+
+class Queue:
+    async def idempotency_key(self, data: dict = None):
+        if data is None:
+            return str(int(time.time())) + ":" + str(uuid.uuid4())
+        return hashlib.sha256(json.dumps(data).encode()).hexdigest()
+
+    async def originates(self, message_batch: MessageBatch) -> bool:
+        raise NotImplementedError()
+
+    async def send(self, data: dict, idempotency_key: str = None):
         raise NotImplementedError()
 
 
@@ -81,8 +91,9 @@ class KVMessage(Message):
 
 
 class KVMessageBatch(MessageBatch):
-    def __init__(self, messages: List[KVMessage]):
+    def __init__(self, queue: 'KVQueue', messages: List[KVMessage]):
         self._messages = messages
+        self._kv_queue = queue
 
     async def messages(self):
         for message in self._messages:
@@ -108,9 +119,24 @@ class KVQueue(PullQueue):
         self.batch_size = batch_size
         self.handler = None
 
-    async def send(self, data: dict):
-        key = str(int(time.time())) + ":" + str(uuid.uuid4())
+    async def originates(self, message_batch: MessageBatch) -> bool:
+        if not isinstance(message_batch, KVMessageBatch):
+            return False
+
+        return self == message_batch._kv_queue
+
+    async def send(self, data: dict, idempotency_key: str | bool = None):
+        key = None
+        if isinstance(key, str):
+            key = idempotency_key
+        elif idempotency_key:
+            key = hashlib.sha256(json.dumps(data).encode()).hexdigest()
+
+        if key is None:
+            key = str(int(time.time())) + ":" + str(uuid.uuid4())
+
         await self.store.put(key, {
+            "key": key,
             "retries": 0,
             "max_retries": self.max_retries,
             "message": data
@@ -131,14 +157,14 @@ class KVQueue(PullQueue):
         if i == 0:
             return None
 
-        return KVMessageBatch(messages)
+        return KVMessageBatch(self, messages)
 
 
 class QueueAware:
-    async def set_queue(self, queue: Queue|None):
+    async def set_queue(self, queue: Queue | None):
         raise NotImplementedError()
 
-    async def get_queue(self) -> Queue|None:
+    async def get_queue(self) -> Queue | None:
         raise NotImplementedError()
 
 
@@ -152,10 +178,21 @@ class QueueBinding(Queue, QueueAware):
     async def get_queue(self):
         return self._queue
 
-    async def send(self, data: dict):
+    async def originates(self, message_batch: MessageBatch) -> bool:
         if self._queue is None:
             raise RuntimeError("Queue is not set")
-        await self._queue.send(data)
+        return await self._queue.originates(message_batch)
+
+    async def send(self, data: dict, idempotency_key: str | bool = None):
+        if self._queue is None:
+            raise RuntimeError("Queue is not set")
+        await self._queue.send(data, idempotency_key)
+
+
+class QueueBatchEvent(Event):
+    def __init__(self, message_batch: MessageBatch):
+        super().__init__()
+        self.message_batch = message_batch
 
 
 class BatchMessageHandlerManager:
@@ -215,3 +252,10 @@ class QueueProcessor:
                 await self._handler_manager.handle(messages, queue)
                 handled_last_batch = await messages.consumed_count()
             handled += handled_last_batch
+
+    async def handle(self, event: QueueBatchEvent):
+        for _, get_queue in self._queues():
+            queue = await get_queue()
+            if await queue.originates(event.message_batch):
+                await self._handler_manager.handle(event.message_batch, queue)
+                return

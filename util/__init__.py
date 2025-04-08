@@ -100,25 +100,36 @@ def path(p, query=None):
 
     return result
 
-def base64_encode(data):
+
+def base64_encode(data) -> str:
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     return base64.b64encode(data).decode('utf-8')
 
-def base64_decode(data):
+
+def base64_decode(data) -> str:
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     return base64.b64decode(data).decode('utf-8')
 
-def base64url_encode(data):
+
+def base64url_encode(data) -> str:
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode('utf-8')
 
 
-def base64url_decode(data):
-    return base64.urlsafe_b64decode(data + '==').decode('utf-8')
+def base64url_decode(data) -> str:
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return base64.urlsafe_b64decode(data + '=='.encode('utf-8')).decode('utf-8')
 
 
-def json_base64_decode(data):
+def json_base64_decode(data) -> Any:
     return json.loads(base64url_decode(data))
 
 
-def json_base64_encode(data):
+def json_base64_encode(data) -> str:
     return base64url_encode(json.dumps(data).encode('utf-8'))
 
 

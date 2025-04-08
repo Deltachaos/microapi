@@ -1,4 +1,6 @@
+import hashlib
 import inspect
+import json
 
 from microapi.di import tag
 from microapi.queue import Queue, MessageBatch, BatchMessageHandler
@@ -7,6 +9,7 @@ from microapi.util import logger
 
 class Workflow:
     pass
+
 
 @tag('workflow_manager')
 class WorkflowManager:
@@ -56,7 +59,8 @@ class QueueWorkflowManager(WorkflowManager):
         method = getattr(workflow, step_name)
         return method, args
 
-    async def dispatch(self, func: callable, args: dict):
+    async def dispatch(self, func: callable, args: dict, idempotency_key: bool | str = True):
+        logger(__name__).debug(f'Workflow dispatch: {func} - {idempotency_key} - {json.dumps(args)}')
         workflow_cls = func.__module__ + "." + func.__qualname__.split(".")[0]
         method_name = func.__name__
         payload = {
@@ -64,7 +68,8 @@ class QueueWorkflowManager(WorkflowManager):
             "step": method_name,
             "args": args,
         }
-        await self._queue.send(payload)
+        await self._queue.send(payload, idempotency_key)
+
 
 @tag("queue_message_handler")
 class WorkflowBatchHandler(BatchMessageHandler):
@@ -90,5 +95,5 @@ class WorkflowBatchHandler(BatchMessageHandler):
                     await workflow_manager.step(data)
                     await message.ack()
                 except Exception as e:
-                    logger(__name__).error(f"Error processing message: {e}")
+                    logger(__name__).exception("Workflow for message failed", exc_info=e)
                     await message.retry()

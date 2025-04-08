@@ -5,6 +5,7 @@ from microapi.cron import CronEvent
 from microapi.di import Container
 from microapi.event import Event, EventDispatcher
 from microapi.http import Response, Request
+from microapi.queue import QueueBatchEvent, MessageBatch
 from microapi.util import logger
 
 
@@ -83,6 +84,18 @@ class HttpKernel:
             self.is_booted = True
             await (await self.container.get(EventDispatcher)).dispatch(BootedEvent(self))
 
+    async def queue_batch(self, message_batch: MessageBatch, container_builder=None):
+        await self.boot()
+        container = self.container.build()
+        if container_builder is not None:
+            await container_builder(container)
+
+        async def dispatch(_):
+            await (await container.get(EventDispatcher)).dispatch(_)
+
+        event = QueueBatchEvent(message_batch)
+        await dispatch(event)
+
     async def cron(self, container_builder=None):
         await self.boot()
         container = self.container.build()
@@ -93,7 +106,7 @@ class HttpKernel:
             await (await container.get(EventDispatcher)).dispatch(_)
 
         event = CronEvent()
-        event.actions = ["queue"]
+        event.actions = []
         await dispatch(event)
 
     async def handle(self, request: Request, container_builder=None) -> Response:

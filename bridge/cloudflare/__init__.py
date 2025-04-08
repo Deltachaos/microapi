@@ -3,6 +3,7 @@ from typing import Any
 from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
 from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
 from microapi.bridge.cloudflare.kv import Store
+from microapi.bridge.cloudflare.queue import Queue, MessageBatchConverter
 from microapi.bridge.cloudflare.sql import Database
 from microapi.bridge.cloudflare.util import to_py
 from microapi.di import Container, ServiceProvider
@@ -10,7 +11,7 @@ from microapi.bridge import CloudContext as FrameworkCloudContext
 from microapi.kernel import HttpKernel as FrameworkHttpKernel
 from microapi.http import ClientExecutor
 from microapi.kv import DatabaseStore
-from microapi.queue import KVQueue, Queue
+from microapi.queue import KVQueue, Queue as FrameworkQueue
 
 
 class CloudContext(FrameworkCloudContext):
@@ -36,16 +37,21 @@ class CloudContext(FrameworkCloudContext):
             raise ValueError("Name must be specified")
         return Database(await self.binding(arguments["name"]))
 
-    async def queue(self, arguments) -> Queue:
+    async def queue(self, arguments) -> FrameworkQueue:
         if "table" in arguments:
             table = arguments["table"]
             key_column = arguments["key_column"] if "key_column" in arguments else "_key"
             value_column = arguments["value_column"] if "value_column" in arguments else "_value"
             store = DatabaseStore(await self.sql(arguments), table, key_column, value_column)
-        else:
+            return KVQueue(store)
+        elif "kv" in arguments:
             store = await self.kv(arguments)
-
-        return KVQueue(store)
+            return KVQueue(store)
+        else:
+            if "name" not in arguments or "queue" not in arguments:
+                raise ValueError("name and queue must be specified")
+            binding = await self.binding(arguments["name"])
+            return Queue(binding, arguments["queue"])
 
     async def env(self, name: str, default=None) -> str|None:
         try:
@@ -103,5 +109,15 @@ class App(ServiceProvider):
                 _.set(FrameworkCloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
 
             await self.kernel.cron(container_builder)
+
+        return handler
+
+    def on_queue(self):
+        async def handler(batch, env, ctx):
+            async def container_builder(_: Container):
+                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
+
+            message_batch = await MessageBatchConverter.to_microapi(batch)
+            await self.kernel.queue_batch(message_batch, container_builder)
 
         return handler

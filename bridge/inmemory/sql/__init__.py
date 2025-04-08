@@ -14,6 +14,7 @@ class Database(FrameworkDatabase):
         con = self.connection()
         params = params or []
         cur = con.cursor()
+        await self.log(_query, params)
         res = cur.execute(_query, params)
         for row in res:
             yield row

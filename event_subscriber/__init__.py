@@ -6,7 +6,7 @@ from microapi.di import tag, Container
 from microapi.event import listen
 from microapi.http import JsonResponse, Request, Response
 from microapi.kernel import RequestEvent, ControllerEvent, ExceptionEvent, HttpException, ViewEvent, ResponseEvent
-from microapi.queue import QueueProcessor
+from microapi.queue import QueueProcessor, QueueBatchEvent
 from microapi.router import Router
 from microapi.security import Firewall
 
@@ -53,7 +53,7 @@ class RoutingEventSubscriber:
 
 @tag('event_subscriber')
 class CorsEventSubscriber:
-    def __init__(self, origin:str="*", methods:list[str]=None, headers:list[str]=None):
+    def __init__(self, origin: str = "*", methods: list[str] = None, headers: list[str] = None):
         if origin is not None:
             origin = "*"
 
@@ -121,6 +121,10 @@ class QueueProcessEventSubscriber:
         self._processor = processor
 
     @listen(CronEvent)
-    async def process(self, event: CronEvent):
+    async def cron(self, event: CronEvent):
         if "queue" in event.actions:
             await self._processor.process()
+
+    @listen(QueueBatchEvent)
+    async def queue(self, event: QueueBatchEvent):
+        await self._processor.handle(event)

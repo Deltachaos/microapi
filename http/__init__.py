@@ -83,7 +83,7 @@ class Response:
         return self._body
 
     async def json(self):
-        return _json.dumps(self._body)
+        return _json.loads(self._body)
 
     def __str__(self):
         body = type(self._body)
@@ -173,6 +173,9 @@ class Client:
 
     async def put(self, url, data=None, json=None, headers=None):
         return await self.request(url, "PUT", data=data, json=json, headers=headers)
+
+    async def patch(self, url, data=None, json=None, headers=None):
+        return await self.request(url, "PATCH", data=data, json=json, headers=headers)
 
     async def delete(self, url, headers=None):
         return await self.request(url, "DELETE", headers=headers)
