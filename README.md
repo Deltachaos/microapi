@@ -1,5 +1,3 @@
-from microapi import QueueBinding
-
 # microapi
 
 MicroAPI is a minimalistic Python micro-framework designed to create Function-as-a-Service (FaaS) applications on Cloudflare Workers. It follows the Keep It Simple, Stupid (KISS) principle to enable lightweight, structured web applications within Cloudflare's Python environment.
