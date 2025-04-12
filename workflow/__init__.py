@@ -16,7 +16,7 @@ class WorkflowManager:
     async def get_step(self, message: dict):
         raise NotImplementedError()
 
-    async def dispatch(self, func: callable, args: dict):
+    async def dispatch(self, func: callable, args: dict = None):
         raise NotImplementedError()
 
     async def step(self, message: dict):
@@ -59,7 +59,9 @@ class QueueWorkflowManager(WorkflowManager):
         method = getattr(workflow, step_name)
         return method, args
 
-    async def dispatch(self, func: callable, args: dict, idempotency_key: bool | str = True):
+    async def dispatch(self, func: callable, args: dict = None, idempotency_key: bool | str = True):
+        if args is None:
+            args = {}
         logger(__name__).debug(f'Workflow dispatch: {func} - {idempotency_key} - {json.dumps(args)}')
         workflow_cls = func.__module__ + "." + func.__qualname__.split(".")[0]
         method_name = func.__name__

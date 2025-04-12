@@ -47,7 +47,8 @@ class AbstractOAuthController:
 
     async def request(self, request: Request):
         state = request.query.get("state")
-        state = self.state_decode(state)
+        if state is None:
+            state = ""
         return state
 
     async def response(self,
@@ -57,24 +58,12 @@ class AbstractOAuthController:
                  state = None):
         return Response("", status_code=204)
 
-    # def authorize_path(self, state):
-    #     encoded = self.state_encode(state)
-    #     data = {
-    #         "state": encoded
-    #     }
-    #     return self.path + f"?{urlencode(data)}"
-    #
-    # def callback_path(self):
-    #     return self.path_callback
-
     async def login(self, client_request: Request):
         config = await self.config(client_request)
         state = await self.request(client_request)
 
         if isinstance(state, Response):
             return state
-
-        state = self.state_encode(state)
 
         params = {
             "client_id": config.client_id,
@@ -87,7 +76,6 @@ class AbstractOAuthController:
         return RedirectResponse(auth_url)
 
     async def callback(self, client_request: Request, code, state = None):
-        state = self.state_decode(state)
         config = await self.config(client_request)
         token_data = {
             "client_id": config.client_id,
@@ -103,15 +91,3 @@ class AbstractOAuthController:
             token = JwtAccessToken(token_info)
 
         return await self.response(client_request, result, token, state)
-
-    def state_encode(self, state):
-        # TODO: add encryption
-        if not state:
-            state = {}
-        return json_base64_encode(state)
-
-    def state_decode(self, state):
-        # TODO: add encryption
-        if state:
-            return json_base64_decode(state)
-        return {}

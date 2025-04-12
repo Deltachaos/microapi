@@ -194,8 +194,11 @@ def jwt_parse(token):
     return str(header_b64), str(payload_b64), str(signature_b64)
 
 
-def jwt_decode(token):
+def jwt_decode(token, secret: str = None):
     """Decode the JWT token and return the payload as a dictionary."""
+    if secret is not None and not jwt_validate(token, secret):
+        raise RuntimeError(f"jwt token {token} does not match secret")
+
     header_b64, payload_b64, signature_b64 = jwt_parse(token)
 
     header = json_base64_decode(header_b64)

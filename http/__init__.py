@@ -1,3 +1,4 @@
+import json
 from urllib.parse import urlencode, urljoin, parse_qs, urlparse
 import json as _json
 from typing import Any, Optional
@@ -58,6 +59,8 @@ class Request:
         body = type(self._body)
         if isinstance(self._body, str):
             body = self._body
+        else:
+            body = type(body)
 
         return f"Request : {self.method} {self.url} headers={_json.dumps(self.headers.as_dict())} body={body}"
 
@@ -89,6 +92,8 @@ class Response:
         body = type(self._body)
         if isinstance(self._body, str):
             body = self._body
+        else:
+            body = type(body)
 
         return f"Response : status_code={self.status_code} headers={_json.dumps(self.headers.as_dict())} body={body}"
 
@@ -100,8 +105,10 @@ class JsonResponse(Response):
         super().__init__(body, headers, status_code)
 
     async def body(self):
-        return await self.json()
+        return json.dumps(await self.json())
 
+    async def json(self):
+        return self._body
 
 
 class RedirectResponse(Response):

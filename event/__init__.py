@@ -4,11 +4,11 @@ from typing import Type, Callable
 from microapi.util import call_async, logger
 
 
-def listen(_event: Type[Event]):
+def listen(_event: Type[Event], priority: int = 0):
     def decorator(func: Callable):
         if not hasattr(func, "_"):
             func._subscribed_events = []
-        func._subscribed_events.append(_event)
+        func._subscribed_events.append((priority, _event))
         return func
     return decorator
 
@@ -38,14 +38,25 @@ class EventDispatcher:
                 break
         return event
 
-    async def listeners(self, event_type: Type[Event]):
+    async def listeners_priority(self, event_type: Type[Event]):
         """Returns the list of listeners for a given event type."""
         for service_type, service_get in self._subscribers():
             for attr_name in dir(service_type):
                 attr = getattr(service_type, attr_name)
                 if callable(attr) and hasattr(attr, "_subscribed_events"):
                     _subscribed_events = getattr(attr, "_subscribed_events")
-                    if event_type in _subscribed_events:
-                        logger(__name__).debug(f"Found listener {service_type}.{attr_name}")
-                        service = await service_get()
-                        yield getattr(service, attr_name)
+                    for priority, _event in _subscribed_events:
+                        if _event == event_type:
+                            logger(__name__).debug(f"Found listener {service_type}.{attr_name}")
+                            service = await service_get()
+                            yield priority, getattr(service, attr_name)
+
+    async def listeners(self, event_type: Type[Event]):
+        items = []
+        async for priority, listener in self.listeners_priority(event_type):
+            items.append((priority, listener))
+
+        items.sort(key=lambda x: x[0])
+
+        for item in items:
+            yield item[1]

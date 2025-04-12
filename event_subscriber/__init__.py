@@ -74,14 +74,15 @@ class CorsEventSubscriber:
             "Access-Control-Allow-Headers": ", ".join(self._headers)
         }
 
-    @listen(RequestEvent)
+    @listen(RequestEvent, -1024)
     async def cors(self, event: RequestEvent):
         request = event.request
         if request.method == "OPTIONS":
-            event.response = Response("", await self.cors_headers(request))
+            event.response = Response("", await self.cors_headers(request), status_code=204)
+            event.stop_propagation()
             return
 
-    @listen(ResponseEvent)
+    @listen(ResponseEvent, 1024)
     async def handle_cors(self, event: ResponseEvent):
         request = event.request
         response = event.response
@@ -97,11 +98,11 @@ class SecurityEventSubscriber:
     def __init__(self, firewall: Firewall):
         self._firewall = firewall
 
-    @listen(RequestEvent)
+    @listen(RequestEvent, -512)
     async def authenticate(self, event: RequestEvent):
         await self._firewall.authenticate(event.request)
 
-    @listen(RequestEvent)
+    @listen(RequestEvent, -256)
     async def firewall(self, event: RequestEvent):
         if not await self._firewall.is_granted(event.request):
             raise HttpException(401, f"Access denied")
@@ -109,7 +110,7 @@ class SecurityEventSubscriber:
 
 @tag('event_subscriber')
 class SerializeEventSubscriber:
-    @listen(ViewEvent)
+    @listen(ViewEvent, 1024)
     async def serialize(self, event: ViewEvent):
         if event.response is None:
             event.response = JsonResponse(event.controller_result)

@@ -5,7 +5,8 @@ from typing import Any
 
 from microapi.di import tag
 from microapi.http import Request
-from microapi.util import jwt_decode, jwt_validate
+from microapi.util import jwt_decode, jwt_validate, logger
+
 
 class User:
     def user_identifier(self):
@@ -82,11 +83,15 @@ class JwtToken(Token):
     @property
     def is_expired(self) -> bool:
         """Check if the access token is expired based on its expiration time."""
-        return datetime.now(timezone.utc) > self.expires_at
+        if self.expires_at is None:
+            return True
+        return datetime.now(timezone.utc) >= self.expires_at
 
     @property
     def expires_in(self) -> timedelta:
         """Returns the remaining time until the token expires."""
+        if self.expires_at is None:
+            raise RuntimeError('no expires_at set')
         return datetime.now(timezone.utc) - self.expires_at
 
     def validate(self, secret):
@@ -116,8 +121,11 @@ class JwtUserResolver(UserResolver):
         self._secret = secret
 
     async def resolve(self, token: Token) -> User|None:
-        if isinstance(token, JwtToken) and token.validate(self._secret):
-            return JwtUser(token.user_identifier())
+        if isinstance(token, JwtToken):
+            if token.validate(self._secret):
+                return JwtUser(token.user_identifier())
+            else:
+                logger(__name__).warning('Token not valid')
         return None
 
 
