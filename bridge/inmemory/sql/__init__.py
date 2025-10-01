@@ -21,3 +21,13 @@ class Database(FrameworkDatabase):
         cur.close()
         con.close()
 
+    async def execute(self, _query: str, params: list[Any] = None) -> None:
+        con = self.connection()
+        params = params or []
+        cur = con.cursor()
+        await self.log(_query, params)
+        cur.execute(_query, params)
+        con.commit()
+        cur.close()
+        con.close()
+
