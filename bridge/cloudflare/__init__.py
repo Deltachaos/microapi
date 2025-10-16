@@ -1,26 +1,30 @@
 from typing import Any
+from workers import WorkflowEntrypoint, WorkerEntrypoint, Response
 
-from microapi.bridge.cloudflare.http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
-from microapi.bridge.cloudflare.http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
-from microapi.bridge.cloudflare.kv import Store
-from microapi.bridge.cloudflare.queue import Queue, MessageBatchConverter
-from microapi.bridge.cloudflare.sql import Database
-from microapi.bridge.cloudflare.util import to_py
-from microapi.di import Container, ServiceProvider
-from microapi.bridge import CloudContext as FrameworkCloudContext
-from microapi.kernel import HttpKernel as FrameworkHttpKernel
-from microapi.http import ClientExecutor
-from microapi.kv import DatabaseStore
-from microapi.queue import KVQueue, Queue as FrameworkQueue
+from .http import RequestConverter as BridgeRequestConverter, RequestConverter, ResponseConverter
+from .http import ResponseConverter as BridgeResponseConverter, ClientExecutor as BridgeClientExecutor
+from .kv import Store, ExpiringStore
+from .queue import Queue, MessageBatchConverter
+from .sql import Database
+from .util import to_py
+from ...config import FrameworkServiceProvider
+from ...di import Container, ServiceProvider
+from ...bridge import CloudContext as FrameworkCloudContext
+from ...kernel import HttpKernel as FrameworkHttpKernel
+from ...http import ClientExecutor
+from ...kv import DatabaseStore
+from ...queue import KVQueue, Queue as FrameworkQueue
+from ...util import logger
 
 
 class CloudContext(FrameworkCloudContext):
-    def __init__(self, context=None, controller=None, env=None):
+    def __init__(self, context=None, controller=None, env=None, features=None):
         super().__init__()
         self._raw = {
             "controller": controller,
             "env": env,
-            "context": context
+            "context": context,
+            "features": features or []
         }
         self.provider_name = "cloudflare"
 
@@ -31,6 +35,11 @@ class CloudContext(FrameworkCloudContext):
         if "name" not in arguments:
             raise ValueError("Name must be specified")
         return Store(await self.binding(arguments["name"]))
+
+    async def expiring_kv(self, arguments, ttl: int = None) -> ExpiringStore:
+        if "name" not in arguments:
+            raise ValueError("Name must be specified")
+        return ExpiringStore(await self.binding(arguments["name"]), ttl)
 
     async def sql(self, arguments) -> Database:
         if "name" not in arguments:
@@ -65,23 +74,41 @@ class CloudContext(FrameworkCloudContext):
 
         env = to_py(self._raw["env"])
 
-        if name not in env:
+        if not hasattr(env, name):
             raise RuntimeError(f"Binding {name} not available")
 
-        return env[name]
+        return getattr(env, name)
 
 
 class App(ServiceProvider):
-    def __init__(self, kernel: FrameworkHttpKernel = None, container: Container = None, service_providers = None):
+    def __init__(self, kernel: FrameworkHttpKernel = None, container: Container = None, service_providers = None, free_tier = False):
         if kernel is not None and (container is not None or service_providers is not None):
             raise RuntimeError("cannot pass both kernel and container or service_providers")
 
         if kernel is None:
             kernel = FrameworkHttpKernel(container=container, service_providers=service_providers)
 
+        self.free_tier = free_tier
         self.kernel = kernel
         self.container = kernel.container
         self.container.provide(self)
+
+    def features(self):
+        if self.free_tier:
+            return [
+                "fetch",
+                "cron",
+                "kv",
+                "d1"
+            ]
+
+        return [
+            "fetch",
+            "cron",
+            "kv",
+            "d1",
+            "queue"
+        ]
 
     def services(self):
         yield RequestConverter, lambda _: BridgeRequestConverter()
@@ -89,12 +116,12 @@ class App(ServiceProvider):
         yield ClientExecutor, lambda _: BridgeClientExecutor()
 
     def on_fetch(self):
-        async def handler(request, env):
+        async def handler(request, env, ctx=None):
             request_converter = await self.container.get(RequestConverter)
             response_converter = await self.container.get(ResponseConverter)
 
             async def container_builder(_: Container):
-                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env))
+                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
 
             converted = await request_converter.to_microapi(request)
             response = await self.kernel.handle(converted, container_builder)
@@ -108,7 +135,11 @@ class App(ServiceProvider):
             async def container_builder(_: Container):
                 _.set(FrameworkCloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
 
-            await self.kernel.cron(container_builder)
+            actions = []
+            if not "queue" in self.features():
+                actions = ["queue"]
+
+            await self.kernel.cron(container_builder, actions)
 
         return handler
 
@@ -121,3 +152,51 @@ class App(ServiceProvider):
             await self.kernel.queue_batch(message_batch, container_builder)
 
         return handler
+
+    def on_run(self):
+        async def handler(event, step, env, ctx):
+            async def container_builder(_: Container):
+                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
+
+            # TODO call kernel
+
+        return handler
+
+class FrameworkAppFactory:
+    def service_providers(self):
+        yield FrameworkServiceProvider()
+
+    def create(self) -> App:
+        return App(service_providers=self.service_providers())
+
+
+class FrameworkEntrypoint(WorkerEntrypoint):
+    def __init__(self, ctx, env):
+        self.env = env
+        self.ctx = ctx
+        self.app = self.app_factory().create()
+
+    def app_factory(self) -> FrameworkAppFactory:
+        return FrameworkAppFactory()
+
+    async def fetch(self, request):
+        handler = self.app.on_fetch()
+        return await handler(request, self.env, self.ctx)
+
+    async def scheduled(self, controller, *args):
+        handler = self.app.on_scheduled()
+        return await handler(controller, self.env, self.ctx)
+
+    async def queue(self, batch, *args):
+        handler = self.app.on_queue()
+        return await handler(batch, self.env, self.ctx)
+
+
+class FrameworkWorkflowEntrypoint(WorkflowEntrypoint):
+    def app_factory(self) -> FrameworkAppFactory:
+        return FrameworkAppFactory()
+
+    async def on_run(self, event, step):
+        app = self.app_factory().create()
+        handler = app.on_run()
+        return await handler(event, step, self.env, self.ctx)

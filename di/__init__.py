@@ -2,7 +2,7 @@ import inspect
 import copy
 from typing import Callable, Tuple, List, Any
 
-from microapi.util import call_async, logger
+from ..util import call_async, logger
 
 
 def tag(_tag: str):

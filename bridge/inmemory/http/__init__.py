@@ -1,5 +1,5 @@
 import http.client as http_client
-from microapi.http import ClientRequest, ClientResponse as FrameworkClientResponse, ClientExecutor as FrameworkClientExecutor
+from ....http import ClientRequest, ClientResponse as FrameworkClientResponse, ClientExecutor as FrameworkClientExecutor
 
 class ClientExecutor(FrameworkClientExecutor):
     async def do_request(self, request: ClientRequest) -> FrameworkClientResponse:

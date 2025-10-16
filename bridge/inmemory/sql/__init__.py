@@ -1,6 +1,6 @@
 import sqlite3
 from typing import Any, AsyncIterator
-from microapi.sql import Database as FrameworkDatabase
+from ....sql import Database as FrameworkDatabase
 
 
 class Database(FrameworkDatabase):
@@ -13,6 +13,7 @@ class Database(FrameworkDatabase):
     async def query(self, _query: str, params: list[Any] = None) -> AsyncIterator[list[Any]]:
         con = self.connection()
         params = params or []
+        _query, params = self.query_in(_query, params)
         cur = con.cursor()
         await self.log(_query, params)
         res = cur.execute(_query, params)

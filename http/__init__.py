@@ -2,7 +2,7 @@ import json
 from urllib.parse import urlencode, urljoin, parse_qs, urlparse
 import json as _json
 from typing import Any, Optional
-from microapi.util import logger, CaseInsensitiveDict
+from ..util import logger, CaseInsensitiveDict
 
 class Headers(CaseInsensitiveDict):
     @staticmethod
@@ -58,7 +58,7 @@ class Request:
     def __str__(self):
         body = type(self._body)
         if isinstance(self._body, str):
-            body = self._body
+            body = len(self._body)
         else:
             body = type(body)
 
@@ -91,7 +91,7 @@ class Response:
     def __str__(self):
         body = type(self._body)
         if isinstance(self._body, str):
-            body = self._body
+            body = len(self._body)
         else:
             body = type(body)
 
@@ -166,9 +166,11 @@ class Client:
         if self.executor is None:
             raise RuntimeError(f"No HTTP Request executor")
 
-        logger(__name__).info(f"Client HTTP Request {client_request}")
+        request_body = await client_request.body()
+        logger(__name__).info(f"Client HTTP Request {client_request} - {request_body}")
         client_response = await self.executor.do_request(client_request)
-        logger(__name__).info(f"Client HTTP Response {client_response}")
+        response_body = await client_response.body()
+        logger(__name__).info(f"Client HTTP Response {client_response} - {response_body}")
 
         return client_response
 

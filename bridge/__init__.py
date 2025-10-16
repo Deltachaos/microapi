@@ -1,8 +1,8 @@
 from typing import Any
-from microapi.http import Request, Response
-from microapi.kv import Store, DatabaseStore
-from microapi.queue import Queue, KVQueue
-from microapi.sql import Database
+from ..http import Request, Response
+from ..kv import Store, DatabaseStore, ExpiringStore
+from ..queue import Queue, KVQueue
+from ..sql import Database
 
 
 class RequestConverter:
@@ -34,6 +34,10 @@ class CloudContext:
         value_column = arguments["value_column"] if "value_column" in arguments else "_value"
 
         return DatabaseStore(await self.sql(arguments), table, key_column, value_column)
+
+    async def expiring_kv(self, arguments, ttl: int = None) -> ExpiringStore:
+        kv = await self.kv(arguments)
+        return ExpiringStore(kv, ttl)
 
     async def queue(self, arguments) -> Queue:
         return KVQueue(await self.kv(arguments))

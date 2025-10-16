@@ -1,4 +1,4 @@
-from microapi.event import Event
+from ..event import Event
 
 
 class CronEvent(Event):

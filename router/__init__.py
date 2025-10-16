@@ -1,8 +1,8 @@
 import re
 from typing import Dict, Type, Tuple, Callable, Optional
 
-from microapi.http import Request
-from microapi.util import logger
+from ..http import Request
+from ..util import logger
 
 
 def route(_route: str, method: str = "GET"):

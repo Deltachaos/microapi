@@ -1,12 +1,12 @@
 import json
 from typing import Any
 
-from microapi.cron import CronEvent
-from microapi.di import Container
-from microapi.event import Event, EventDispatcher
-from microapi.http import Response, Request
-from microapi.queue import QueueBatchEvent, MessageBatch
-from microapi.util import logger
+from ..cron import CronEvent
+from ..di import Container
+from ..event import Event, EventDispatcher
+from ..http import Response, Request
+from ..queue import QueueBatchEvent, MessageBatch
+from ..util import logger
 
 
 class HttpException(Exception):
@@ -96,7 +96,7 @@ class HttpKernel:
         event = QueueBatchEvent(message_batch)
         await dispatch(event)
 
-    async def cron(self, container_builder=None):
+    async def cron(self, container_builder=None, actions=None):
         await self.boot()
         container = self.container.build()
         if container_builder is not None:
@@ -106,7 +106,7 @@ class HttpKernel:
             await (await container.get(EventDispatcher)).dispatch(_)
 
         event = CronEvent()
-        event.actions = []
+        event.actions = actions or []
         await dispatch(event)
 
     async def handle(self, request: Request, container_builder=None) -> Response:
@@ -115,10 +115,15 @@ class HttpKernel:
         if container_builder is not None:
             await container_builder(container)
 
-        logger(__name__).debug(f"Handling request {request} with {container.service_ids()}")
+        request_body = await request.body()
+        logger(__name__).debug(f"Handling request {request} - {request_body}")
 
         async def dispatch(_):
             await (await container.get(EventDispatcher)).dispatch(_)
+
+        async def log_response(_response: Response):
+            response_body = await _response.body()
+            logger(__name__).debug(f"Responding with {_response} - {response_body}")
 
         try:
             container.set(Request, request)
@@ -127,7 +132,7 @@ class HttpKernel:
             await dispatch(event)
 
             if event.response:
-                logger(__name__).debug(f"Responding with {event.response}")
+                await log_response(event.response)
                 return event.response
 
             controller_event = ControllerEvent(request)
@@ -151,12 +156,11 @@ class HttpKernel:
             response_event = ResponseEvent(request, controller_result)
             await dispatch(response_event)
 
-            logger(__name__).debug(f"Responding with {response_event.response}")
+            await log_response(response_event.response)
             return response_event.response
         except Exception as e:
-            raise e
             exception_event = ExceptionEvent(request, e)
             await dispatch(exception_event)
             response = exception_event.response or HttpException(str(e), status_code=500).to_response()
-            logger(__name__).debug(f"Responding with {response}")
+            await log_response(response)
             return response

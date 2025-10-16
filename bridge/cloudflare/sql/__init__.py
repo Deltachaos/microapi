@@ -1,8 +1,8 @@
 from typing import Tuple, List, Any, AsyncIterator
 import re
 
-from microapi.bridge.cloudflare.util import to_js, to_py
-from microapi.sql import Database as FrameworkDatabase
+from ..util import to_js, to_py
+from ....sql import Database as FrameworkDatabase
 
 
 class Database(FrameworkDatabase):
@@ -43,7 +43,11 @@ class Database(FrameworkDatabase):
 
     async def query(self, _query: str, params: list[Any] = None) -> AsyncIterator[list[Any]]:
         params = params or []
+        _query, params = self.query_in(_query, params)
         _query, params = Database.transform_null(_query, params)
+        if len(params) > 100:
+            _query = self.interpolate(_query, params)
+            params = []
         await self.log(_query, params)
         stmt = self._connection.prepare(to_js(_query))
         js_params = []

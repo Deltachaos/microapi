@@ -1,3 +1,5 @@
+from microapi import QueueBinding
+
 # microapi
 
 MicroAPI is a minimalistic Python micro-framework designed to create Function-as-a-Service (FaaS) applications on Cloudflare Workers. It follows the Keep It Simple, Stupid (KISS) principle to enable lightweight, structured web applications within Cloudflare's Python environment.
@@ -31,7 +33,7 @@ See [Deltachaos/microapi-example](https://github.com/Deltachaos/microapi-example
 This is a small example to demonstrate the basic functionality.
 
 ```python
-from microapi.bridge.cloudflare import App
+from microapi.bridge.cloudflare import FrameworkEntrypoint, FrameworkWorkflowEntrypoint, FrameworkAppFactory
 from microapi.config import FrameworkServiceProvider
 from microapi.di import tag, ServiceProvider
 from microapi.bridge import CloudContext
@@ -40,7 +42,6 @@ from microapi.http import Request, Response, JsonResponse
 from microapi.router import route
 from microapi.queue import QueueBinding, BatchMessageHandler, Queue, MessageBatch
 from microapi import CloudContextQueueBindingFactory
-
 
 @tag('queue')
 class MyQueue(QueueBinding):
@@ -88,7 +89,7 @@ class MyController:
             "some": "data"
         })
         return Response(status_code=204)
-
+    
     
 class AppServiceProvider(ServiceProvider):
     def services(self):
@@ -98,18 +99,59 @@ class AppServiceProvider(ServiceProvider):
         yield MyBatchHandler
         yield MyController
 
+        
+class AppFactory(FrameworkAppFactory):
+    def service_providers(self):
+        yield FrameworkServiceProvider()
+        yield AppServiceProvider()
+
+
+# Starting from here, those are the entrypoints for cloudflare
+class Default(FrameworkEntrypoint):
+    def app_factory(self):
+        return AppFactory()
+
+    
+class Workflow(FrameworkWorkflowEntrypoint):
+    def app_factory(self):
+        return AppFactory()
+
+    async def run(self, event, step):
+        return await self.on_run(event, step)
+```
+
+### `wrangler.toml` Configuration
+
+```ini
+#:schema node_modules/wrangler/config-schema.json
+name = "my-app"
+main = "main.py"
+compatibility_flags = ["python_workers"]
+compatibility_date = "2024-10-22"
+
+kv_namespaces = [
+  { binding = "SOME_KV_STORE", id = "<id>" }
+]
+
+[[workflows]]
+name = "my-app"
+binding = "MY_WORKFLOW"
+class_name = "Workflow"
+```
+
+## Old version
+
+```
+from microapi.bridge.cloudflare import App
 
 def service_providers():
     yield FrameworkServiceProvider()
     yield AppServiceProvider()
 
-
 app = App(service_providers=service_providers())
 on_fetch = app.on_fetch()
 on_scheduled = app.on_scheduled()
 ```
-
-### `wrangler.toml` Configuration
 
 ```ini
 #:schema node_modules/wrangler/config-schema.json
@@ -125,11 +167,9 @@ kv_namespaces = [
 
 ## Full Application Example
 
-This example can be run locally for testing. It does not use the cloudflare entrypoint, but instead mocks a `Request` object.
+This example can be run locally for testing and on cloudflare. Run it and go to http://localhost:8080/some/foobar
 
 ```python
-import asyncio
-from urllib.parse import urlparse
 from microapi.http import Request, JsonResponse
 from microapi.kernel import HttpKernel, ViewEvent
 from microapi.config import FrameworkServiceProvider
@@ -181,15 +221,31 @@ def service_providers():
     yield FrameworkServiceProvider()
     yield AppServiceProvider()
 
-app = HttpKernel(service_providers=service_providers())
-
-if __name__ == '__main__':
-    async def do():
-        request = Request()
-        request.url = urlparse("http://www.google.de/some/data")
-        await app.handle(request)
-
-    asyncio.get_event_loop().run_until_complete(do())
+if __name__ == "__main__":
+    from microapi.bridge.inmemory import App
+    app = App(service_providers=service_providers())
+    app.run(
+        host='0.0.0.0',
+        port=8000,
+        cron_interval=30
+    )
+else:
+    from microapi.bridge.cloudflare import FrameworkEntrypoint, FrameworkWorkflowEntrypoint, FrameworkAppFactory
+    
+    class AppFactory(FrameworkAppFactory):
+        def service_providers(self):
+            return service_providers()
+    
+    class Default(FrameworkEntrypoint):
+        def app_factory(self):
+            return AppFactory()
+    
+    class Workflow(FrameworkWorkflowEntrypoint):
+        def app_factory(self):
+            return AppFactory()
+    
+        async def run(self, event, step):
+            return await self.on_run(event, step)
 ```
 
 ## Cloudflare Worker Python Support

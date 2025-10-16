@@ -5,9 +5,9 @@ import uuid
 import asyncio
 from typing import List
 
-from microapi.event import Event
-from microapi.kv import JSONStore, Store
-from microapi.util import logger
+from ..event import Event
+from ..kv import JSONStore, Store
+from ..util import logger
 
 
 class Message:

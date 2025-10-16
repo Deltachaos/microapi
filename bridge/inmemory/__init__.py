@@ -1,9 +1,11 @@
-from microapi.bridge.inmemory.http import ClientExecutor as BridgeClientExecutor
-from microapi.bridge.inmemory.sql import Database
-from microapi.di import Container, ServiceProvider
-from microapi.bridge import CloudContext as FrameworkCloudContext
-from microapi.kernel import HttpKernel as FrameworkHttpKernel
-from microapi.http import ClientExecutor
+from .http import ClientExecutor as BridgeClientExecutor
+from .http.server import CronScheduler, HttpServer
+from .sql import Database
+from ...di import Container, ServiceProvider
+from ...bridge import CloudContext as FrameworkCloudContext
+from ...kernel import HttpKernel as FrameworkHttpKernel
+from ...http import ClientExecutor
+from asyncio import new_event_loop, gather
 import os
 
 
@@ -31,7 +33,26 @@ class App(ServiceProvider):
         self.kernel = kernel
         self.container = kernel.container
         self.container.provide(self)
+        
 
     def services(self):
         yield ClientExecutor, lambda _: BridgeClientExecutor()
         yield FrameworkCloudContext, lambda _: CloudContext()
+
+    def run(self, host='0.0.0.0', port=8000, cron_interval=30):
+        """Run the application with HTTP server and cron scheduler"""
+        async def main():
+            async def container_builder(_: Container):
+                _.set(CloudContext, lambda _: CloudContext())
+
+            # Create instances
+            cron_scheduler = CronScheduler(self, container_builder, interval=cron_interval)
+            http_server = HttpServer(self, container_builder, host=host, port=port)
+
+            # Run both in parallel
+            await gather(
+                cron_scheduler.run(),
+                http_server.run()
+            )
+
+        new_event_loop().run_until_complete(main())

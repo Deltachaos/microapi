@@ -1,7 +1,7 @@
 from threading import Event
 from typing import Type, Callable
 
-from microapi.util import call_async, logger
+from ..util import call_async, logger
 
 
 def listen(_event: Type[Event], priority: int = 0):

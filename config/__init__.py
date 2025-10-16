@@ -1,14 +1,14 @@
-from microapi.di import ServiceProvider
-from microapi.event import EventDispatcher
-from microapi.event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber, \
+from ..di import ServiceProvider
+from ..event import EventDispatcher
+from ..event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber, \
     CorsEventSubscriber, QueueProcessEventSubscriber
-from microapi.queue import BatchMessageHandlerManager, QueueProcessor
-from microapi.router import Router
-from microapi.http import Client, ClientFactory
-from microapi.di import Container
-from microapi.security import Security, TokenStore, Firewall, DefaultVoter, JwtTokenResolver, UserResolver, \
+from ..queue import BatchMessageHandlerManager, QueueProcessor
+from ..router import Router
+from ..http import Client, ClientFactory
+from ..di import Container
+from ..security import Security, TokenStore, Firewall, DefaultVoter, JwtTokenResolver, UserResolver, \
     JwtUserResolver
-from microapi.workflow import WorkflowManager, WorkflowBatchHandler, QueueWorkflowManager
+from ..workflow import WorkflowManager, WorkflowBatchHandler, QueueWorkflowManager
 
 
 class FrameworkServiceProvider(ServiceProvider):

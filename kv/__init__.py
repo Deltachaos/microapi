@@ -1,12 +1,13 @@
 import copy
 import json
+import time
 from typing import Any
 
-from microapi.sql import Database
+from ..sql import Database
 
 
 class Store:
-    async def get(self, key: str) -> str:
+    async def get(self, key: str) -> str | None:
         raise NotImplementedError()
 
     async def has(self, key: str) -> bool:
@@ -79,6 +80,79 @@ class DatabaseStore(Store):
 
         async for row in self._database.query(query, params):
             yield row[0]
+
+
+class ExpiringStore(Store):
+    def __init__(self, decorated: Store, ttl: int = None):
+        self.decorated = decorated
+        self.ttl = ttl  # in seconds
+
+    async def get(self, key: str) -> str | None:
+        raw = await self.decorated.get(key)
+        if not raw:
+            return None
+
+        try:
+            data = json.loads(raw)
+            expires_at = data.get("expires_at")
+            if expires_at and time.time() > expires_at:
+                await self.decorated.delete(key)
+                return None
+            return data.get("value")
+        except Exception:
+            return None
+
+    async def has(self, key: str) -> bool:
+        return await self.get(key) is not None
+
+    async def put(self, key: str, value: str) -> None:
+        expires_at = time.time() + self.ttl if self.ttl else None
+        payload = {
+            "value": value,
+            "expires_at": expires_at
+        }
+        await self.decorated.put(key, json.dumps(payload))
+
+    async def delete(self, key: str) -> None:
+        await self.decorated.delete(key)
+
+    async def list(self, prefix: str = None):
+        async for key in self.decorated.list(prefix):
+            value = await self.get(key)
+            if value is not None:
+                yield key
+
+
+class PrefixStore(Store):
+    def __init__(self, decorated: Store, prefix: str = ""):
+        self.decorated = decorated
+        self.prefix = prefix
+
+    def _full_key(self, key: str) -> str:
+        return f"{self.prefix}{key}"
+
+    def _strip_prefix(self, full_key: str) -> str:
+        if full_key.startswith(self.prefix):
+            return full_key[len(self.prefix):]
+        return full_key
+
+    async def get(self, key: str) -> str | None:
+        return await self.decorated.get(self._full_key(key))
+
+    async def has(self, key: str) -> bool:
+        return await self.decorated.has(self._full_key(key))
+
+    async def put(self, key: str, value: str) -> None:
+        await self.decorated.put(self._full_key(key), value)
+
+    async def delete(self, key: str) -> None:
+        await self.decorated.delete(self._full_key(key))
+
+    async def list(self, prefix: str = None):
+        effective_prefix = self._full_key(prefix or "")
+        async for key in self.decorated.list(effective_prefix):
+            if isinstance(key, str) and key.startswith(self.prefix):
+                yield self._strip_prefix(key)
 
 
 class JSONStore:

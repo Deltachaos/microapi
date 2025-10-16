@@ -1,7 +1,7 @@
 import json
 
-from microapi.bridge.cloudflare.util import to_js, to_py
-from microapi.queue import Queue as FrameworkQueue, MessageBatch as FrameworkMessageBatch, Message as FrameworkMessage
+from ..util import to_js, to_py
+from ....queue import Queue as FrameworkQueue, MessageBatch as FrameworkMessageBatch, Message as FrameworkMessage
 
 
 

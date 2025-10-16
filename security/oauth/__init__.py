@@ -1,8 +1,8 @@
 from urllib.parse import urlencode
 
-from microapi.http import Request, ClientResponse, RedirectResponse, Response, ClientFactory
-from microapi.security import JwtToken
-from microapi.util import json_base64_decode, json_base64_encode
+from ...http import Request, ClientResponse, RedirectResponse, Response, ClientFactory
+from ...security import JwtToken
+from ...util import json_base64_decode, json_base64_encode
 
 
 class JwtAccessToken(JwtToken):

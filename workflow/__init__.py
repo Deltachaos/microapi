@@ -2,9 +2,9 @@ import hashlib
 import inspect
 import json
 
-from microapi.di import tag
-from microapi.queue import Queue, MessageBatch, BatchMessageHandler
-from microapi.util import logger
+from ..di import tag
+from ..queue import Queue, MessageBatch, BatchMessageHandler
+from ..util import logger
 
 
 class Workflow:

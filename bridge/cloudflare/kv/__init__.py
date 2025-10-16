@@ -1,10 +1,9 @@
 from typing import Any
 
-from microapi.bridge.cloudflare.util import to_py, to_js
-from microapi.kv import Store as FrameworkStore
+from ..util import to_py, to_js
+from ....kv import Store as FrameworkStore, ExpiringStore as FrameworkExpiringStore
 
-
-class Store(FrameworkStore):
+class StoreEngine:
     store = None
 
     def __init__(self, store: Any):
@@ -14,8 +13,11 @@ class Store(FrameworkStore):
         result = await self.store.get(key)
         return to_py(result)
 
-    async def put(self, key: str, value: str) -> None:
-        await self.store.put(key, to_js(value))
+    async def put(self, key: str, value: str, options: dict = None) -> None:
+        if options is None:
+            await self.store.put(key, to_js(value))
+        else:
+            await self.store.put(key, to_js(value), to_js(options))
 
     async def delete(self, key: str) -> None:
         await self.store.delete(to_js(key))
@@ -32,3 +34,50 @@ class Store(FrameworkStore):
                 result = None
             else:
                 result = await self.store.list({ "cursor": result.cursor })
+
+
+class Store(FrameworkStore):
+    engine = None
+
+    def __init__(self, store: Any):
+        self.engine = StoreEngine(store)
+
+    async def get(self, key: str) -> str:
+        return await self.engine.get(key)
+
+    async def put(self, key: str, value: str) -> None:
+        await self.engine.put(key, value)
+
+    async def delete(self, key: str) -> None:
+        await self.engine.delete(key)
+
+    async def list(self, prefix: str = None):
+        async for item in self.engine.list(prefix):
+            yield item
+
+
+class ExpiringStore(FrameworkExpiringStore):
+    engine = None
+    ttl = None
+
+    def __init__(self, store: Any, ttl: int = None):
+        self.engine = StoreEngine(store)
+        self.ttl = ttl
+
+    async def get(self, key: str) -> str:
+        return await self.engine.get(key)
+
+    async def put(self, key: str, value: str) -> None:
+        if self.ttl is None:
+            await self.engine.put(key, value)
+        else:
+            await self.engine.put(key, value, {
+                "expirationTtl": self.ttl
+            })
+
+    async def delete(self, key: str) -> None:
+        await self.engine.delete(key)
+
+    async def list(self, prefix: str = None):
+        async for item in self.engine.list(prefix):
+            yield item
