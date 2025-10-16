@@ -141,7 +141,7 @@ class_name = "Workflow"
 
 ## Old version
 
-```
+```python
 from microapi.bridge.cloudflare import App
 
 def service_providers():
