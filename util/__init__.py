@@ -80,7 +80,7 @@ class CaseInsensitiveDict:
 
 def logger(name="app"):
     _ = logging.getLogger(name)
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     return _
 
 

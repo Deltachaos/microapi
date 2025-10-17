@@ -1,7 +1,7 @@
 import json
 from urllib.parse import urlencode, urljoin, parse_qs, urlparse
 import json as _json
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Awaitable
 from ..util import logger, CaseInsensitiveDict
 
 class Headers(CaseInsensitiveDict):
@@ -131,10 +131,15 @@ class ClientExecutor:
         raise NotImplementedError()
 
 
+# Middleware signature: takes a ClientRequest and returns a modified ClientRequest
+ClientMiddleware = Callable[[ClientRequest], Awaitable[ClientRequest]]
+
+
 class Client:
-    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None):
+    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None, middleware: ClientMiddleware = None):
         self.headers = Headers.create_from(headers)
         self.executor = executor
+        self.middleware = middleware
 
     async def request(self, url: str, method: str = "GET", params: dict = None, data: dict | str = None, json=None,
                       headers: dict|Headers = None) -> ClientResponse:
@@ -162,6 +167,10 @@ class Client:
             updated_headers,
             body
         )
+
+        # Apply middleware if present
+        if self.middleware is not None:
+            client_request = await self.middleware(client_request)
 
         if self.executor is None:
             raise RuntimeError(f"No HTTP Request executor")
@@ -203,8 +212,10 @@ class Client:
 
 
 class ClientFactory:
-    def __init__(self, executor: ClientExecutor = None):
+    def __init__(self, executor: ClientExecutor = None, middleware: ClientMiddleware = None):
         self.executor = executor
+        self.middleware = middleware
 
-    def create(self, headers: dict = None) -> Client:
-        return Client(headers, self.executor)
+    def create(self, headers: dict = None, middleware: ClientMiddleware = None) -> Client:
+        # Use provided middleware or fall back to factory's middleware
+        return Client(headers, self.executor, middleware or self.middleware)

@@ -150,7 +150,7 @@ class KVQueue(PullQueue):
             if i > self.batch_size:
                 break
             data = await self.store.get(key)
-            logger(__name__).debug(f"Pulled message {key} {json.dumps(data)}")
+            logger(__name__).info(f"Pulled message {key} {json.dumps(data)}")
             if data:
                 messages.append(KVMessage(self.store, key, data))
 
@@ -238,7 +238,7 @@ class QueueProcessor:
                 real_queue = await queue.get_queue()
 
             if isinstance(real_queue, PullQueue):
-                logger(__name__).debug(f"Process queue: {type(queue)}")
+                logger(__name__).info(f"Process queue: {type(queue)}")
                 messages = await real_queue.pull()
                 if messages:
                     yield queue, messages

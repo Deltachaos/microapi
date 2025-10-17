@@ -7,7 +7,7 @@ from ..util import logger
 
 class Database:
     async def log(self, _query: str, params: list[Any] = None):
-        logger(__name__).debug(f"Executing query: {_query} with params: {json.dumps(params)}")
+        logger(__name__).info(f"Executing query: {_query} with params: {json.dumps(params)}")
 
     def query_in(self, sql: str, args: list[Any]):
         new_args = []

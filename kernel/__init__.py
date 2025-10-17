@@ -116,14 +116,14 @@ class HttpKernel:
             await container_builder(container)
 
         request_body = await request.body()
-        logger(__name__).debug(f"Handling request {request} - {request_body}")
+        logger(__name__).info(f"Handling request {request} - {request_body}")
 
         async def dispatch(_):
             await (await container.get(EventDispatcher)).dispatch(_)
 
         async def log_response(_response: Response):
             response_body = await _response.body()
-            logger(__name__).debug(f"Responding with {_response} - {response_body}")
+            logger(__name__).info(f"Responding with {_response} - {response_body}")
 
         try:
             container.set(Request, request)
