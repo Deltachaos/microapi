@@ -131,12 +131,8 @@ class ClientExecutor:
         raise NotImplementedError()
 
 
-# Middleware signature: takes a ClientRequest and returns a modified ClientRequest
-ClientMiddleware = Callable[[ClientRequest], Awaitable[ClientRequest]]
-
-
 class Client:
-    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None, middleware: ClientMiddleware = None):
+    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None, middleware = None):
         self.headers = Headers.create_from(headers)
         self.executor = executor
         self.middleware = middleware
@@ -212,10 +208,10 @@ class Client:
 
 
 class ClientFactory:
-    def __init__(self, executor: ClientExecutor = None, middleware: ClientMiddleware = None):
+    def __init__(self, executor: ClientExecutor = None, middleware = None):
         self.executor = executor
         self.middleware = middleware
 
-    def create(self, headers: dict = None, middleware: ClientMiddleware = None) -> Client:
+    def create(self, headers: dict = None, middleware = None) -> Client:
         # Use provided middleware or fall back to factory's middleware
         return Client(headers, self.executor, middleware or self.middleware)
