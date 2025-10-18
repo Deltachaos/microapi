@@ -39,11 +39,14 @@ class App(ServiceProvider):
         yield ClientExecutor, lambda _: BridgeClientExecutor()
         yield FrameworkCloudContext, lambda _: CloudContext()
 
-    def run(self, host='0.0.0.0', port=8000, cron_interval=30):
+    def run(self, host='0.0.0.0', port=8000, cron_interval=30, init = None):
         """Run the application with HTTP server and cron scheduler"""
         async def main():
             async def container_builder(_: Container):
                 _.set(CloudContext, lambda _: CloudContext())
+
+            if init is not None:
+                await init()
 
             # Create instances
             cron_scheduler = CronScheduler(self, container_builder, interval=cron_interval)

@@ -7,6 +7,7 @@ from ..event import Event, EventDispatcher
 from ..http import Response, Request
 from ..queue import QueueBatchEvent, MessageBatch
 from ..util import logger
+from ..workflow import WorkflowEvent
 
 
 class HttpException(Exception):
@@ -95,6 +96,19 @@ class HttpKernel:
 
         event = QueueBatchEvent(message_batch)
         await dispatch(event)
+
+    async def workflow(self, workflow_cls: str, method: str, args, container_builder=None):
+        await self.boot()
+        container = self.container.build()
+        if container_builder is not None:
+            await container_builder(container)
+
+        async def dispatch(_):
+            await (await container.get(EventDispatcher)).dispatch(_)
+
+        event = WorkflowEvent(workflow_cls, method, args)
+        await dispatch(event)
+        return event.result
 
     async def cron(self, container_builder=None, actions=None):
         await self.boot()

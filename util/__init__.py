@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import inspect
 import json
 import base64
 import hmac
@@ -90,6 +91,33 @@ async def call_async(listener: Callable, *args, **kwargs) -> Any:
     else:
         #return await asyncio.to_thread(listener, *args, **kwargs)
         return listener(*args, **kwargs)
+
+
+async def to_list(iterator):
+    items = []
+    if inspect.isasyncgen(iterator):
+        async for item in iterator:
+            items.append(item)
+    else:
+        try:
+            iter(iterator)
+        except TypeError:
+            return [iterator]
+        else:
+            for item in iterator:
+                items.append(item)
+
+    return items
+
+
+def from_dict(data: dict, path: str, default=None):
+    keys = path.split(".")
+    current = data
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
 
 
 def path(p, query=None):

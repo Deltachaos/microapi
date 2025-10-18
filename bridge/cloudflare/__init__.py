@@ -7,6 +7,7 @@ from .kv import Store, ExpiringStore
 from .queue import Queue, MessageBatchConverter
 from .sql import Database
 from .util import to_py
+from .workflow import WorkflowManagerFactory as BridgeWorkflowManagerFactory
 from ...config import FrameworkServiceProvider
 from ...di import Container, ServiceProvider
 from ...bridge import CloudContext as FrameworkCloudContext
@@ -14,22 +15,29 @@ from ...kernel import HttpKernel as FrameworkHttpKernel
 from ...http import ClientExecutor
 from ...kv import DatabaseStore
 from ...queue import KVQueue, Queue as FrameworkQueue
-from ...util import logger
+from ...util import from_dict
+from ...workflow import WorkflowManagerFactory
 
 
 class CloudContext(FrameworkCloudContext):
-    def __init__(self, context=None, controller=None, env=None, features=None):
+    def __init__(self, context=None, controller=None, env=None, step=None, features=None, config=None):
         super().__init__()
         self._raw = {
             "controller": controller,
             "env": env,
+            "step": step,
             "context": context,
-            "features": features or []
+            "features": features or [],
+            "config": config or {}
         }
         self.provider_name = "cloudflare"
 
     async def raw(self) -> dict:
         return self._raw
+
+    async def config(self, path:str, default=None):
+        config = self._raw["config"] or {}
+        return from_dict(config, path, default)
 
     async def kv(self, arguments) -> Store:
         if "name" not in arguments:
@@ -81,13 +89,21 @@ class CloudContext(FrameworkCloudContext):
 
 
 class App(ServiceProvider):
-    def __init__(self, kernel: FrameworkHttpKernel = None, container: Container = None, service_providers = None, free_tier = False):
+    def __init__(
+            self,
+            kernel: FrameworkHttpKernel = None,
+            container: Container = None,
+            service_providers = None,
+            free_tier: bool = False,
+            config = None
+    ):
         if kernel is not None and (container is not None or service_providers is not None):
             raise RuntimeError("cannot pass both kernel and container or service_providers")
 
         if kernel is None:
             kernel = FrameworkHttpKernel(container=container, service_providers=service_providers)
 
+        self.config = config or {}
         self.free_tier = free_tier
         self.kernel = kernel
         self.container = kernel.container
@@ -114,6 +130,7 @@ class App(ServiceProvider):
         yield RequestConverter, lambda _: BridgeRequestConverter()
         yield ResponseConverter, lambda _: BridgeResponseConverter()
         yield ClientExecutor, lambda _: BridgeClientExecutor()
+        yield WorkflowManagerFactory, lambda _: BridgeWorkflowManagerFactory(_)
 
     def on_fetch(self):
         async def handler(request, env, ctx=None):
@@ -121,7 +138,12 @@ class App(ServiceProvider):
             response_converter = await self.container.get(ResponseConverter)
 
             async def container_builder(_: Container):
-                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
+                _.set(FrameworkCloudContext, lambda _: CloudContext(
+                    env=env,
+                    context=ctx,
+                    config=self.config,
+                    features=self.features()
+                ))
 
             converted = await request_converter.to_microapi(request)
             response = await self.kernel.handle(converted, container_builder)
@@ -133,7 +155,13 @@ class App(ServiceProvider):
         async def handler(controller, env, ctx):
 
             async def container_builder(_: Container):
-                _.set(FrameworkCloudContext, lambda _: CloudContext(controller=controller, env=env, context=ctx))
+                _.set(FrameworkCloudContext, lambda _: CloudContext(
+                    controller=controller,
+                    env=env,
+                    context=ctx,
+                    config=self.config,
+                    features=self.features()
+                ))
 
             actions = []
             if not "queue" in self.features():
@@ -146,7 +174,12 @@ class App(ServiceProvider):
     def on_queue(self):
         async def handler(batch, env, ctx):
             async def container_builder(_: Container):
-                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
+                _.set(FrameworkCloudContext, lambda _: CloudContext(
+                    env=env,
+                    context=ctx,
+                    config=self.config,
+                    features=self.features()
+                ))
 
             message_batch = await MessageBatchConverter.to_microapi(batch)
             await self.kernel.queue_batch(message_batch, container_builder)
@@ -156,9 +189,25 @@ class App(ServiceProvider):
     def on_run(self):
         async def handler(event, step, env, ctx):
             async def container_builder(_: Container):
-                _.set(FrameworkCloudContext, lambda _: CloudContext(env=env, context=ctx))
+                _.set(FrameworkCloudContext, lambda _: CloudContext(
+                    env=env,
+                    context=ctx,
+                    step=step,
+                    config=self.config,
+                    features=self.features()
+                ))
 
-            # TODO call kernel
+            payload = event['payload']
+
+            if not "workflow_cls" in payload or not "method" in payload or not "args" in payload:
+                raise RuntimeError("missing arguments in event playload")
+
+            return await self.kernel.workflow(
+                payload["workflow_cls"],
+                payload["method"],
+                payload["args"],
+                container_builder
+            )
 
         return handler
 
@@ -166,8 +215,11 @@ class FrameworkAppFactory:
     def service_providers(self):
         yield FrameworkServiceProvider()
 
+    def config(self):
+        return {}
+
     def create(self) -> App:
-        return App(service_providers=self.service_providers())
+        return App(service_providers=self.service_providers(), config=self.config())
 
 
 class FrameworkEntrypoint(WorkerEntrypoint):

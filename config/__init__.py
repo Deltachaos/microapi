@@ -8,7 +8,7 @@ from ..http import Client, ClientFactory
 from ..di import Container
 from ..security import Security, TokenStore, Firewall, DefaultVoter, JwtTokenResolver, UserResolver, \
     JwtUserResolver
-from ..workflow import WorkflowManager, WorkflowBatchHandler, QueueWorkflowManager
+from ..workflow import WorkflowManager, WorkflowEventSubscriber, WorkflowManagerFactory
 
 
 class FrameworkServiceProvider(ServiceProvider):
@@ -30,6 +30,18 @@ class FrameworkServiceProvider(ServiceProvider):
         yield BatchMessageHandlerManager, lambda _: BatchMessageHandlerManager(_.tagged_generator('queue_message_handler'))
         yield QueueProcessor, FrameworkServiceProvider.queue_processor_factory
         yield QueueProcessEventSubscriber
+
+        # Workflow
+        async def workflow_manager_factory(_: Container) -> WorkflowManager:
+            if await _.has(WorkflowManagerFactory):
+                factory = await _.get(WorkflowManagerFactory)
+            else:
+                factory = WorkflowManagerFactory(_)
+
+            return await factory.create()
+
+        yield WorkflowManager, workflow_manager_factory
+        yield WorkflowEventSubscriber
 
         # Util
         yield ClientFactory
@@ -100,18 +112,3 @@ class SecurityServiceProvider(ServiceProvider):
             return firewall
 
         return factory
-
-class QueueWorkflowServiceProvider(ServiceProvider):
-    def __init__(self, queue_service):
-        self.queue_service = queue_service
-
-    def services(self):
-
-        async def workflow_manager_factory(_: Container) -> WorkflowManager:
-            queue = await _.get(self.queue_service)
-            return QueueWorkflowManager(queue, _.tagged_generator('workflow'))
-
-        # Workflows
-        yield WorkflowManager, workflow_manager_factory
-        yield WorkflowBatchHandler, lambda _: WorkflowBatchHandler( _.tagged_generator('workflow_manager'))
-
