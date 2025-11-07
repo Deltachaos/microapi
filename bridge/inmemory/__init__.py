@@ -12,7 +12,7 @@ import os
 class CloudContext(FrameworkCloudContext):
     async def sql(self, arguments) -> Database:
         if "name" not in arguments:
-            raise ValueError("Name must be specified")
+            arguments["name"] = await self.config("default.database", "APP")
 
         return Database(arguments["name"])
 

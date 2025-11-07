@@ -132,10 +132,11 @@ class ClientExecutor:
 
 
 class Client:
-    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None, middleware = None):
+    def __init__(self, headers: dict|Headers = None, executor: ClientExecutor = None, middleware = None, debug = False):
         self.headers = Headers.create_from(headers)
         self.executor = executor
         self.middleware = middleware
+        self._debug = debug
 
     async def request(self, url: str, method: str = "GET", params: dict = None, data: dict | str = None, json=None,
                       headers: dict|Headers = None) -> ClientResponse:
@@ -172,9 +173,13 @@ class Client:
             raise RuntimeError(f"No HTTP Request executor")
 
         request_body = await client_request.body()
+        if not self._debug:
+            request_body = len(request_body)
         logger(__name__).info(f"Client HTTP Request {client_request} - {request_body}")
         client_response = await self.executor.do_request(client_request)
         response_body = await client_response.body()
+        if not self._debug:
+            response_body = len(response_body)
         logger(__name__).info(f"Client HTTP Response {client_response} - {response_body}")
 
         return client_response

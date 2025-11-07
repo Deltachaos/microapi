@@ -257,5 +257,9 @@ class QueueProcessor:
         for _, get_queue in self._queues():
             queue = await get_queue()
             if await queue.originates(event.message_batch):
+                logger().info(f"Call queue handler for queue {type(queue)}")
                 await self._handler_manager.handle(event.message_batch, queue)
                 return
+            else:
+                logger().info(f"Skip queue handler for queue {type(queue)}")
+

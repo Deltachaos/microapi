@@ -1,3 +1,4 @@
+from .. import CloudContextQueueBindingFactory
 from ..di import ServiceProvider
 from ..event import EventDispatcher
 from ..event_subscriber import RoutingEventSubscriber, SecurityEventSubscriber, SerializeEventSubscriber, \
@@ -8,7 +9,9 @@ from ..http import Client, ClientFactory
 from ..di import Container
 from ..security import Security, TokenStore, Firewall, DefaultVoter, JwtTokenResolver, UserResolver, \
     JwtUserResolver
-from ..workflow import WorkflowManager, WorkflowEventSubscriber, WorkflowManagerFactory
+from ..translator import TranslatorFactory
+from ..workflow import WorkflowManager, WorkflowEventSubscriber, WorkflowManagerFactory, WorkflowQueueBatchHandler, \
+    WorkflowQueue
 
 
 class FrameworkServiceProvider(ServiceProvider):
@@ -42,8 +45,11 @@ class FrameworkServiceProvider(ServiceProvider):
 
         yield WorkflowManager, workflow_manager_factory
         yield WorkflowEventSubscriber
+        yield WorkflowQueueBatchHandler
+        yield WorkflowQueue, CloudContextQueueBindingFactory.create(WorkflowQueue)
 
         # Util
+        yield TranslatorFactory
         yield ClientFactory
         yield Client, FrameworkServiceProvider.client_factory
 

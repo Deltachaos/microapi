@@ -6,6 +6,7 @@ import base64
 import hmac
 import hashlib
 import logging
+import traceback
 from typing import Callable, Any
 from urllib.parse import urlencode
 
@@ -118,6 +119,13 @@ def from_dict(data: dict, path: str, default=None):
             return default
         current = current[key]
     return current
+
+
+def exception_traceback(ex: Exception) -> str:
+    return '\n'.join([
+        ''.join(traceback.format_exception_only(None, ex)).strip(),
+        ''.join(traceback.format_exception(None, ex, ex.__traceback__)).strip()
+    ])
 
 
 def path(p, query=None):

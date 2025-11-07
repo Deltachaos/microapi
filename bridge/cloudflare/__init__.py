@@ -16,7 +16,7 @@ from ...http import ClientExecutor
 from ...kv import DatabaseStore
 from ...queue import KVQueue, Queue as FrameworkQueue
 from ...util import from_dict
-from ...workflow import WorkflowManagerFactory
+from ...workflow import WorkflowManagerFactory, WorkflowQueue
 
 
 class CloudContext(FrameworkCloudContext):
@@ -51,10 +51,15 @@ class CloudContext(FrameworkCloudContext):
 
     async def sql(self, arguments) -> Database:
         if "name" not in arguments:
-            raise ValueError("Name must be specified")
+            arguments["name"] = await self.config("default.database", "APP")
         return Database(await self.binding(arguments["name"]))
 
     async def queue(self, arguments) -> FrameworkQueue:
+        if arguments == WorkflowQueue:
+            arguments = await self.config("workflow.queue", await self.config("default.queue", {
+                "table": "queue_workflow",
+            }))
+
         if "table" in arguments:
             table = arguments["table"]
             key_column = arguments["key_column"] if "key_column" in arguments else "_key"

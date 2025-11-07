@@ -6,18 +6,21 @@ from ..di import Container
 from ..event import Event, EventDispatcher
 from ..http import Response, Request
 from ..queue import QueueBatchEvent, MessageBatch
-from ..util import logger
+from ..util import logger, exception_traceback
 from ..workflow import WorkflowEvent
 
-
 class HttpException(Exception):
-    def __init__(self, message="", status_code=500, headers=None):
+    def __init__(self, message="", status_code=500, headers=None, exception=None):
         self.message = message
         self.status_code = status_code
         self.headers = headers or {}
+        self.exception = exception
 
     def to_response(self):
-        return Response(json.dumps({"error": self.message}), status_code=self.status_code, headers=self.headers)
+        trace = None
+        if self.exception:
+            trace = exception_traceback(self.exception)
+        return Response(json.dumps({"error": self.message,"trace":trace}), status_code=self.status_code, headers=self.headers)
 
 
 class BootedEvent(Event):
@@ -175,6 +178,6 @@ class HttpKernel:
         except Exception as e:
             exception_event = ExceptionEvent(request, e)
             await dispatch(exception_event)
-            response = exception_event.response or HttpException(str(e), status_code=500).to_response()
+            response = exception_event.response or HttpException(str(e), status_code=500, exception=e).to_response()
             await log_response(response)
             return response

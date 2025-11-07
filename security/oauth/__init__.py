@@ -1,4 +1,4 @@
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
 
 from ...http import Request, ClientResponse, RedirectResponse, Response, ClientFactory
 from ...security import JwtToken
@@ -65,15 +65,39 @@ class AbstractOAuthController:
         if isinstance(state, Response):
             return state
 
-        params = {
+        # Parse the authorization URL to extract existing query parameters
+        parsed_url = urlparse(config.authorization_url)
+        existing_params = parse_qs(parsed_url.query)
+        
+        # Flatten the existing parameters (parse_qs returns lists)
+        flattened_existing = {}
+        for key, value_list in existing_params.items():
+            flattened_existing[key] = value_list[0] if value_list else ""
+        
+        # New parameters to add/override
+        new_params = {
             "client_id": config.client_id,
             "redirect_uri": config.redirect_uri,
             "response_type": "code",
             "scope": config.scope,
             "state": state
         }
-        auth_url = f"{config.authorization_url}?{urlencode(params)}"
-        return RedirectResponse(auth_url)
+        
+        # Merge parameters, with new_params taking precedence
+        merged_params = {**flattened_existing, **new_params}
+        
+        # Construct the final URL
+        query_string = urlencode(merged_params)
+        final_url = urlunparse((
+            parsed_url.scheme,
+            parsed_url.netloc,
+            parsed_url.path,
+            parsed_url.params,
+            query_string,
+            parsed_url.fragment
+        ))
+        
+        return RedirectResponse(final_url)
 
     async def callback(self, client_request: Request, code, state = None):
         config = await self.config(client_request)

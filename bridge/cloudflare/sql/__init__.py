@@ -2,7 +2,7 @@ from typing import Tuple, List, Any, AsyncIterator
 import re
 
 from ..util import to_js, to_py
-from ....sql import Database as FrameworkDatabase
+from ....sql import Sqlite3Database as FrameworkDatabase
 
 
 class Database(FrameworkDatabase):

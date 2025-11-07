@@ -1,6 +1,6 @@
 import sqlite3
 from typing import Any, AsyncIterator
-from ....sql import Database as FrameworkDatabase
+from ....sql import Sqlite3Database as FrameworkDatabase
 
 
 class Database(FrameworkDatabase):
@@ -8,7 +8,10 @@ class Database(FrameworkDatabase):
         self._name = name
 
     def connection(self):
-        return sqlite3.connect(self._name + '.sqlite')
+        conn = sqlite3.connect(self._name + '.sqlite')
+        # Enable foreign key constraints for data integrity
+        conn.execute('PRAGMA foreign_keys = ON')
+        return conn
 
     async def query(self, _query: str, params: list[Any] = None) -> AsyncIterator[list[Any]]:
         con = self.connection()

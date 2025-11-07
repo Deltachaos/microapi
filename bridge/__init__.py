@@ -3,6 +3,7 @@ from ..http import Request, Response
 from ..kv import Store, DatabaseStore, ExpiringStore
 from ..queue import Queue, KVQueue
 from ..sql import Database
+from ..util import from_dict
 
 
 class RequestConverter:
@@ -24,6 +25,10 @@ class ResponseConverter:
 class CloudContext:
     def __init__(self, ):
         self.provider_name = None
+
+    async def config(self, path:str, default=None):
+        config = {}
+        return from_dict(config, path, default)
 
     async def sql(self, arguments) -> Database:
         raise NotImplementedError()
